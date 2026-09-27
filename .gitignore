@@ -1,0 +1,4 @@
+*.bak
+.release/
+Thumbs.db
+desktop.ini
