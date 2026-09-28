@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1
+
+- Fixed an "AddOn tried to call the protected function" error when building a Mythic+ listing. The "Playstyle in title" option was removed: Blizzard doesn't let addons change the group title, so it always uses Blizzard's own title (e.g. "+12 Relaxed").
+
 ## 0.5.0
 
 First public release.

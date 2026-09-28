@@ -2,7 +2,7 @@
 ## Title: Gotta Queue 'Em All
 ## Notes: Larger Premade Groups window with docked sidebars for searching (filters, fit toggles, presets, season-best keys) and for starting a group (listing presets, your keystone, requirements, playstyle). Matches EllesmereUI's look when its Blizzard skin is active.
 ## Author: deuxzeus
-## Version: 0.5.0
+## Version: 0.5.1
 ## OptionalDeps: EllesmereUI, EllesmereUIBlizzardSkin
 ## SavedVariables: GottaQueueEmAllDB
 
