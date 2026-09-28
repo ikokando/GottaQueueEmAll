@@ -659,15 +659,6 @@ local function BuildStyleAndRequirements()
     end
     P.lookLust = ns.MakeCheck(P, ns.LUST_ICON .. " Lust", Look("lust"), LookTip("Bloodlust / Heroism"))
     P.lookBrez = ns.MakeCheck(P, ns.BREZ_ICON .. " Brez", Look("brez"), LookTip("a battle res"))
-    P.titleStyle = ns.MakeCheck(P, "Playstyle in title", function(cb)
-        ns.DB().createTitlePlaystyle = cb:GetChecked() and true or false
-        if mode == "center" then CR.RebuildTitle() end
-        CR.Refresh()
-    end, function(tt)
-        tt:SetText("Playstyle in title", 1, 1, 1)
-        tt:AddLine("Mythic+ keys: Blizzard builds the title itself. On: \"+12 Relaxed\". Off: \"+12\".", 0.85, 0.85, 0.85, true)
-        tt:AddLine("Remembered for every listing. Lust / brez can't go into the title: Blizzard's title has no room for it and addons can't write there.", 0.6, 0.6, 0.6, true)
-    end)
 
     P.hReq = Header("Requirements")
     P.reqRating = BuildRequirement("rating", "Min. rating", "Mine -200", 200, MyRating,
@@ -1072,9 +1063,7 @@ function CR.Relayout(m)
     Place(P.hStyle, x2, y)
     Place(P.diffDD, PAD, y - HEADER_H - 4)
     Place(P.styleDD, x2, y - HEADER_H - 4)
-    y = y - HEADER_H - 4 - BTN_H - 4
-    Place(P.titleStyle, x2, y)
-    y = y - CHECK_H - 2 - SECTION_GAP
+    y = y - HEADER_H - 4 - BTN_H - SECTION_GAP
 
     -- Looking for (only marks applicants)
     y = PlaceHeader(P.hLook, y)
@@ -1132,7 +1121,7 @@ local function TitleHint(ai)
         return nil   -- title not readable, but Blizzard builds it from the key
     end
     local example = "+12"
-    if draft.playstyle and ns.DB().createTitlePlaystyle ~= false then
+    if draft.playstyle then
         example = example .. " " .. (PlaystyleLabel(draft.playstyle) or "")
     end
     return ("Add the key level, e.g. \"%s\""):format(example)
@@ -1183,7 +1172,6 @@ function CR.Refresh()
     -- Looking for
     P.lookLust:SetChecked(draft.lust)
     P.lookBrez:SetChecked(draft.brez)
-    P.titleStyle:SetChecked(ns.DB().createTitlePlaystyle ~= false)
 
     -- Requirements (rating only for Mythic+)
     local isMPlus = ai and ai.isMythicPlusActivity or false
@@ -1279,36 +1267,6 @@ local function RefreshApplicants()
     end)
 end
 
--------------------------------------------------------------------------------
---  Playstyle in the title (Mythic+, option, on by default = Blizzard's way)
--------------------------------------------------------------------------------
--- Blizzard builds Mythic+ titles itself: C_LFGList.SetEntryTitle(activity,
--- group, playstyle, generalPlaystyle) -> "+12 Relaxed". The playstyle
--- argument is optional, so with the option off the same call without it
--- gives "+12". The text itself is Blizzard's; addons can't add their own
--- (the box refuses it, tested: "need Lust+BR" never arrived).
-local function TitleWithPlaystyle() return ns.DB().createTitlePlaystyle ~= false end
-
-local function IsMPlusForm()
-    local ai = EC and Info(EC.selectedActivity)
-    return ai and ai.isMythicPlusActivity or false
-end
-
--- Post-hook of Blizzard's title builder: drop the playstyle if unwanted.
-local function TitleHook()
-    if TitleWithPlaystyle() or not (EC and EC:IsVisible() and IsMPlusForm()) then return end
-    local act, grp = Num(EC.selectedActivity), Num(EC.selectedGroup)
-    if act and grp and C_LFGList.SetEntryTitle then pcall(C_LFGList.SetEntryTitle, act, grp) end
-end
-
--- Let Blizzard rebuild its title now (the hook adjusts it).
-function CR.RebuildTitle()
-    if not (EC and EC:IsVisible() and IsMPlusForm()) then return end
-    if LFGListEntryCreation_SetTitleFromActivityInfo then
-        pcall(LFGListEntryCreation_SetTitleFromActivityInfo, EC)
-    end
-end
-
 function CR.SetLookingFor(lust, brez)
     draft.lust, draft.brez = lust and true or false, brez and true or false
     local db = ns.DB()
@@ -1383,9 +1341,6 @@ function CR.Init(apply)
     Build()
     if LFGListApplicationViewer_UpdateApplicantMember then
         hooksecurefunc("LFGListApplicationViewer_UpdateApplicantMember", DecorateMember)
-    end
-    if LFGListEntryCreation_SetTitleFromActivityInfo then
-        hooksecurefunc("LFGListEntryCreation_SetTitleFromActivityInfo", TitleHook)
     end
 
     -- The form opened: Blizzard has filled it in (last listing, or your
