@@ -5,6 +5,7 @@
 ## Version: 0.5.1
 ## OptionalDeps: EllesmereUI, EllesmereUIBlizzardSkin
 ## SavedVariables: GottaQueueEmAllDB
+## X-Curse-Project-ID: 1714876
 
 GottaQueueEmAll.lua
 GottaQueueEmAll_Create.lua
