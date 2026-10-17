@@ -1,4 +1,4 @@
-# Push a tag like v0.5.0 -> the addon is zipped and uploaded to GitHub Releases,
+# Push a tag like v1.0.0 -> the addon is zipped and uploaded to GitHub Releases,
 # and to CurseForge / Wago once their project IDs are in the .toc and the
 # CF_API_KEY / WAGO_API_TOKEN secrets are set in the repository settings.
 name: Package and release

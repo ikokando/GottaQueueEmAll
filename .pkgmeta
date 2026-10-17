@@ -6,4 +6,7 @@ manual-changelog:
 
 ignore:
   - README.md
-  - media
+  - tools
+  # PNG logos are for CurseForge / GitHub only; the game uses logo-qlens-mark.tga.
+  - media/logo-qlens.png
+  - media/logo-qlens-mark.png

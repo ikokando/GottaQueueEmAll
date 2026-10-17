@@ -1,0 +1,6 @@
+<Bindings>
+	<!-- Key Bindings > AddOns > Gotta Queue 'Em All; also set from the window's Hotkey button. -->
+	<Binding name="GOTTAQUEUEEMALL_TOGGLE" header="GOTTAQUEUEEMALL" category="ADDONS">
+		GottaQueueEmAll_Toggle()
+	</Binding>
+</Bindings>

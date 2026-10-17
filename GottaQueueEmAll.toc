@@ -1,11 +1,23 @@
-## Interface: 120000, 120001, 120005, 120007, 120100
+## Interface: 120000, 120001, 120005, 120007, 120100, 120105
 ## Title: Gotta Queue 'Em All
-## Notes: Larger Premade Groups window with docked sidebars for searching (filters, fit toggles, presets, season-best keys) and for starting a group (listing presets, your keystone, requirements, playstyle). Matches EllesmereUI's look when its Blizzard skin is active.
+## Notes: A Mythic+ group finder in its own window: search with a key-level filter, sign up, manage applicants and list your keystone - with ratings, best runs, roles, Lust / B-Res and Raider.IO info at a glance.
 ## Author: deuxzeus
-## Version: 0.5.1
-## OptionalDeps: EllesmereUI, EllesmereUIBlizzardSkin
+## Version: 1.0.0
+## OptionalDeps: RaiderIO
 ## SavedVariables: GottaQueueEmAllDB
 ## X-Curse-Project-ID: 1714876
+## IconTexture: Interface\AddOns\GottaQueueEmAll\media\logo-qlens-mark
+## AddonCompartmentFunc: GottaQueueEmAll_OnAddonCompartmentClick
 
-GottaQueueEmAll.lua
-GottaQueueEmAll_Create.lua
+Core.lua
+UI\Theme.lua
+UI\Anim.lua
+UI\Widgets.lua
+UI\Data.lua
+UI\KeyRead.lua
+UI\KeyProbe.lua
+UI\Browse.lua
+UI\Group.lua
+UI\Create.lua
+UI\Launcher.lua
+UI\Window.lua
