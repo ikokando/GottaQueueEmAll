@@ -4,6 +4,12 @@ A Mythic+ group finder in its own window. Search with a real key-level filter,
 sign up, handle your applicants and list your keystone, with ratings, best runs,
 roles, Bloodlust / battle res and Raider.IO info at a glance.
 
+![Browse: groups filtered by key level and sorted by key](media/screenshots/1-browse.png)
+
+![Your Group: your listing, party slots and applicants](media/screenshots/3-your-group.png)
+
+![+ Create: list your keystone](media/screenshots/2-create.png)
+
 ## Features
 
 **Browse**
