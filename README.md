@@ -5,11 +5,13 @@ with a real key-level filter, sign up, list your group and handle your applicant
 with ratings, best runs, roles and specs, lockouts, Bloodlust / battle res and
 Raider.IO info at a glance. Blizzard's window stays closed.
 
-![Browse: groups filtered by key level and sorted by key](media/screenshots/1-browse.png)
+![Mythic+ Browse: dungeons, key level, leader rating and best run, Role or Spec view](media/screenshots/1-mythic-plus-browse.png)
+
+![Mythic+ + Create: your keystone, playstyle, requirements and your own title](media/screenshots/2-mythic-plus-create.png)
 
 ![Your Group: your listing, party slots and applicants](media/screenshots/3-your-group.png)
 
-![+ Create: list your keystone](media/screenshots/2-create.png)
+![Raid Browse: lockouts, killed bosses, group size and every member at a glance](media/screenshots/4-raid-browse.png)
 
 ## Features
 
