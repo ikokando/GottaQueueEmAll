@@ -1,8 +1,9 @@
 # Gotta Queue 'Em All
 
-A Mythic+ group finder in its own window. Search with a real key-level filter,
-sign up, handle your applicants and list your keystone, with ratings, best runs,
-roles, Bloodlust / battle res and Raider.IO info at a glance.
+Your Group Finder in its own window: **Mythic+**, **Raid** and **Mythic 0**. Search
+with a real key-level filter, sign up, list your group and handle your applicants,
+with ratings, best runs, roles and specs, lockouts, Bloodlust / battle res and
+Raider.IO info at a glance. Blizzard's window stays closed.
 
 ![Browse: groups filtered by key level and sorted by key](media/screenshots/1-browse.png)
 
@@ -32,8 +33,27 @@ roles, Bloodlust / battle res and Raider.IO info at a glance.
 **+ Create**
 - Lists the keystone in your bags: playstyle, minimum rating (with how many leaders of
   your last search qualify), minimum item level, private group, own faction only.
+- Blizzard's title box moves into the window: keep Blizzard's title or type your own.
+
+**Raid**
+- This season's raids (and Season 1's on request) at Normal, Heroic and Mythic, with
+  your lockout on each.
+- Cards with the bosses the group's lockout has killed, its size by role, the item
+  level it asks for, every member as a role glyph in class color or by spec.
+- Filters: difficulty, bosses killed at most, minimum group size, spot for your role,
+  your item level fits, has Lust, not declined. List your own raid group with the title
+  you type.
+
+**Mythic 0**
+- This season's dungeons on Mythic, no keystone needed: search, filter and list
+  groups like in Mythic+; your key never ends up in the title.
+
+**Role or Spec view**
+- One switch (View: Role | Spec) next to Sort: members as role glyphs in class color,
+  or with their spec under each glyph ("Resto", "BM", "Demo").
 
 **Everything else**
+- A welcome screen on the first start (`/gotta welcome` brings it back).
 - Raider.IO profiles in the tooltips and a "MAIN" tag for alts, when Raider.IO is installed.
 - Minimap button, a hotkey (set it with the Hotkey button in the window), the addon compartment.
 - Resizable window; size and position are remembered.
@@ -51,8 +71,10 @@ Settings: Options > AddOns > Gotta Queue 'Em All, or `/gotta settings`.
   the digits away ("+14", "14", "+14 Relaxed"). Titles with more numbers in them (custom
   text) stay unread and always show. If a patch stops this, the slider says so and cards
   show the title as before; `/gotta keyprobe` checks it.
-- Group titles can't be written by addons: a listing gets Blizzard's own title
-  (your key and a playstyle word). That's why + Create lets Blizzard prepare it first.
+- Group titles can't be written by addons, only typed by you. That's why + Create lets
+  Blizzard prepare its form first and then shows Blizzard's own title box in the window.
+- Searching from this window also sets the filters of Blizzard's own Group Finder
+  (dungeon difficulty, roles, rating): they are shared.
 - The window holds a secure button (for + Create), so it closes when combat starts.
 
 ## Feedback

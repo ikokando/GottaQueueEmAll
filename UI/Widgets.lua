@@ -149,8 +149,9 @@ local VARIANT = {
               text = C.onGold, hoverText = C.onGold },
     ghost = { bg = { 0.04, 0.055, 0.08, 0.4 }, hoverBg = { 0.82, 0.64, 0.30, 0.10 },
               border = { 0.82, 0.64, 0.30, 0.5 }, hoverBorder = C.gold, text = C.goldText, hoverText = C.goldLight },
-    quiet = { bg = { 0.04, 0.055, 0.08, 0.4 }, hoverBg = { 0.84, 0.33, 0.29, 0.08 },
-              border = C.lineStrong, hoverBorder = { 0.84, 0.33, 0.29, 0.6 }, text = C.label, hoverText = C.badText },
+    -- Nearly opaque: it also sits on bright dungeon art (Your Group's Delist).
+    quiet = { bg = { 0.04, 0.055, 0.08, 0.85 }, hoverBg = { 0.20, 0.08, 0.08, 0.9 },
+              border = { 0.63, 0.71, 0.84, 0.28 }, hoverBorder = { 0.84, 0.33, 0.29, 0.6 }, text = C.text, hoverText = C.badText },
     mark  = { bg = { 0, 0, 0, 0 }, hoverBg = { 0.82, 0.64, 0.30, 0.08 },
               border = { 0.63, 0.71, 0.84, 0.14 }, hoverBorder = { 0.82, 0.64, 0.30, 0.6 }, text = C.label, hoverText = C.textHi },
     done  = { bg = { 0.24, 0.69, 0.38, 0.12 }, hoverBg = { 0.24, 0.69, 0.38, 0.2 },
@@ -456,11 +457,13 @@ local function Interactive(s)
 end
 
 -- opts: min, max, step, value, stops (gradient track), fill (gold fill to the
--- right instead of dimming the left), marker (a value, e.g. your own rating).
+-- right instead of dimming the left; fill = "left": up to the thumb), marker
+-- (a value, e.g. your own rating).
 function W.Slider(parent, opts)
     local s = CreateFrame("Frame", nil, parent)
     s:SetHeight(22)
     s.lo, s.hi, s.step = opts.min or 0, opts.max or 100, opts.step or 1
+    s.fillLeft = opts.fill == "left"
     Track(s, opts.stops)
     if opts.fill then
         s.fill = W.Tex(s, "BACKGROUND", nil, 2)
@@ -488,7 +491,11 @@ function W.Slider(parent, opts)
         local x = Frac(self, self.value) * w
         self.thumb:ClearAllPoints()
         self.thumb:SetPoint("CENTER", self, "LEFT", x, 0)
-        if self.fill then
+        if self.fill and self.fillLeft then
+            self.fill:ClearAllPoints()
+            self.fill:SetPoint("LEFT")
+            self.fill:SetWidth(max(1, x))
+        elseif self.fill then
             self.fill:ClearAllPoints()
             self.fill:SetPoint("LEFT", self, "LEFT", x, 0)
             self.fill:SetPoint("RIGHT")
@@ -684,6 +691,76 @@ function W.RoleBadge(parent, size)
             self.glyph:SetVertexColor(unpack(C.faint))
         end
     end
+    return f
+end
+
+-------------------------------------------------------------------------------
+--  Members view: role glyphs only ("role", default) or with each member's
+--  spec ("spec"). One account-wide setting (GottaQueueEmAllDB.ui.memberView),
+--  one switch per Browse page; flipping one repaints them all.
+-------------------------------------------------------------------------------
+function W.SpecView()
+    local db = ns.DB and ns.DB()
+    return db and db.ui and db.ui.memberView == "spec" or false
+end
+
+-- Short spec names, as players write them; other names up to six letters
+-- stay whole (Arcane, Unholy), longer ones (other client languages) are cut
+-- to five.
+local SPEC_SHORT = {
+    ["Demonology"] = "Demo", ["Destruction"] = "Destro", ["Affliction"] = "Affli", ["Protection"] = "Prot",
+    ["Retribution"] = "Ret", ["Restoration"] = "Resto", ["Discipline"] = "Disc", ["Assassination"] = "Assa",
+    ["Subtlety"] = "Sub", ["Beast Mastery"] = "BM", ["Marksmanship"] = "MM", ["Survival"] = "Surv",
+    ["Elemental"] = "Ele", ["Enhancement"] = "Enh", ["Brewmaster"] = "Brew", ["Mistweaver"] = "MW",
+    ["Windwalker"] = "WW", ["Vengeance"] = "Veng", ["Devastation"] = "Dev", ["Preservation"] = "Pres",
+    ["Augmentation"] = "Aug", ["Guardian"] = "Guard", ["Balance"] = "Boomy", ["Devourer"] = "Devo",
+}
+function W.SpecShort(spec)
+    if not spec then return "" end
+    if SPEC_SHORT[spec] then return SPEC_SHORT[spec] end
+    local chars = {}
+    for ch in spec:gmatch("[%z\1-\127\194-\244][\128-\191]*") do chars[#chars + 1] = ch end   -- by character, not byte
+    if #chars <= 6 then return spec end
+    return table.concat(chars, "", 1, 5)
+end
+
+local viewSwitches = {}
+
+-- "View  [Role] [Spec]", anchored by its RIGHT edge (call :SetPoint on
+-- the returned frame). onChange: the page's render.
+function W.ViewSwitch(parent, onChange)
+    local f = CreateFrame("Frame", nil, parent)
+    f:SetSize(1, 26)
+    f.onChange = onChange
+    f.buttons = {}
+    local right
+    for _, v in ipairs({ { "spec", "Spec" }, { "role", "Role" } }) do
+        local b = W.Button(f, v[2], "mark", nil, 26, "tiny")
+        b:SetWidth(b.label:GetStringWidth() + 18)
+        if right then b:SetPoint("RIGHT", right, "LEFT", -4, 0) else b:SetPoint("RIGHT") end
+        b:SetScript("OnClick", function()
+            local db = ns.DB and ns.DB()
+            if not db then return end
+            db.ui = db.ui or {}
+            db.ui.memberView = v[1]
+            for _, s in ipairs(viewSwitches) do
+                s:Paint()
+                if s.onChange then s.onChange() end
+            end
+        end)
+        f.buttons[v[1]] = b
+        right = b
+    end
+    local l = W.Text(f, "small")
+    l:SetPoint("RIGHT", right, "LEFT", -8, 0)
+    l:SetText("View")   -- short: it shares row 2 with the toggles and Sort
+    f.left = l   -- what a neighbor anchors to
+    function f:Paint()
+        local cur = W.SpecView() and "spec" or "role"
+        for k, b in pairs(self.buttons) do b:SetVariant(k == cur and "ghost" or "mark") end
+    end
+    f:Paint()
+    viewSwitches[#viewSwitches + 1] = f
     return f
 end
 

@@ -5,8 +5,9 @@
 --  Blizzard's Start a Group (UI/Window.lua), so Blizzard's own code picks
 --  your keystone and writes the title; "List group" here then sends
 --  CreateListing with the playstyle, requirements and options set below.
---  The title keeps what Blizzard wrote (its playstyle word included): addon
---  code writing the title gets the listing blocked.
+--  The title is Blizzard's ("+12 Relaxed") unless you type your own in its
+--  title box, borrowed into this page (UI/TitleBox.lua): addon code writing
+--  the title gets the listing blocked.
 --  Settings persist in GottaQueueEmAllDB.ui.create; "Looking for" marks
 --  matching applicants in Your Group.
 -------------------------------------------------------------------------------
@@ -171,8 +172,20 @@ local function BuildRight(col, st)
     fac:SetPoint("LEFT", priv, "RIGHT", 6, 0)
     fac:SetChecked(st.ownFaction); fac.onChange = function(v) st.ownFaction = v; Refresh() end
 
+    -- Title, optional: Blizzard's own title box (UI/TitleBox.lua). Blizzard
+    -- writes "+14 Relaxed" into it; typing replaces that.
+    local tl = W.Label(col, "Title"); tl:SetPoint("TOPLEFT", priv, "BOTTOMLEFT", 0, -18)
+    local opt = W.Text(col, "tiny", C.muted); opt:SetPoint("LEFT", tl, "RIGHT", 8, 0); opt:SetText("OPTIONAL")
+    CR.titleHolder = UI.TitleBox.Holder(col)
+    CR.titleHolder:SetPoint("TOPLEFT", tl, "BOTTOMLEFT", 0, -8)
+    CR.titleHolder:SetPoint("RIGHT", col, "RIGHT")
+    CR.titleNote = W.Text(col, "bodySm")
+    CR.titleNote:SetPoint("TOPLEFT", CR.titleHolder, "BOTTOMLEFT", 0, -8)
+    CR.titleNote:SetPoint("RIGHT", col, "RIGHT")
+    CR.titleNote:SetWordWrap(true)
+
     -- How others see it: a Browse card in small.
-    local pv = W.Label(col, "How others see it"); pv:SetPoint("TOPLEFT", priv, "BOTTOMLEFT", 0, -18)
+    local pv = W.Label(col, "How others see it"); pv:SetPoint("TOPLEFT", CR.titleNote, "BOTTOMLEFT", 0, -18)
     local card = W.Card(col)
     card:SetPoint("TOPLEFT", pv, "BOTTOMLEFT", 0, -8)
     card:SetPoint("RIGHT", col, "RIGHT")
@@ -331,6 +344,38 @@ Refresh = function()
             D.PlaystyleLabel(CR.titleStyle) or "?", D.PlaystyleLabel(st.playstyle) or "?")
     end
     CR.listNote:SetText(note)
+
+    -- Title box.
+    local TB = UI.TitleBox
+    local box = TB.Box()
+    if TB.IsBorrowed(CR.titleHolder) then
+        local locked = box and not box:IsEnabled()
+        CR.titleNote:SetText(locked and "|cff8d98a8Blizzard sets this title itself.|r"
+            or "|cff8d98a8Blizzard writes your key and playstyle here; type your own to replace it. Enter lists.|r")
+    elseif ready then
+        CR.titleNote:SetText("|cff8d98a8The title box is in Blizzard's window right now.|r")
+    else
+        CR.titleNote:SetText("|cff8d98a8Click the + Create tab: the title box appears here.|r")
+    end
+    CR.titleHolder:Paint(false)
+end
+
+-- After the + Create tab's secure click: once Blizzard prepared the form for
+-- your key, its window closes and the title box moves in here.
+function CR.AfterStart(again)
+    if InCombatLockdown() or not (CR.page and CR.page:IsVisible()) then return end
+    local key = D.OwnKey()
+    -- Blizzard may fill its form a moment later: look once more.
+    if key and not D.FormReady(key.act) and not again then
+        C_Timer.After(0.3, function() CR.AfterStart(true) end)
+    end
+    if key and D.FormReady(key.act) then
+        UI.TitleBox.TakeOver(CR.titleHolder, {
+            onEnter = function() if CR.list:IsEnabled() then CR.list:Click() end end,
+            onFocus = function() CR.titleHolder:Paint(false) end,
+        })
+    end
+    Refresh()
 end
 
 -------------------------------------------------------------------------------
@@ -379,6 +424,9 @@ function UI.BuildCreate(page)
         -- Blizzard's form fills in right after the tab's secure click.
         C_Timer.After(0.2, Refresh)
         if UI.SetStatus then UI.SetStatus("Lists the keystone in your bags") end
+    end)
+    page:SetScript("OnHide", function()
+        if UI.TitleBox.IsBorrowed(CR.titleHolder) then UI.TitleBox.Return() end   -- the box goes home
     end)
     -- The preview's art crop follows the card's new width.
     page:SetScript("OnSizeChanged", function(self) if self:IsVisible() then Refresh() end end)

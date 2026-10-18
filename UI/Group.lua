@@ -102,17 +102,24 @@ local function BuildEditor(page)
     local _, myIlvl = GetAverageItemLevel()
     myIlvl = floor(D.Num(myIlvl) or 0)
 
+    -- Each column's parts, so a raid listing can hide the rating column.
+    e.parts = {}
     local function Column(x, w, label, slider, valueText, marks)
+        local parts = { slider }
+        e.parts[label] = parts
         local l = W.Label(e, label); l:SetPoint("TOPLEFT", x, -10)
         local v = W.Text(e, "h2"); v:SetPoint("TOPRIGHT", e, "TOPLEFT", x + w, -8)
+        parts[#parts + 1] = l; parts[#parts + 1] = v
         slider:SetPoint("TOPLEFT", x, -32); slider:SetWidth(w)
         local mx = x
         for _, m in ipairs(marks) do
             local b = W.Button(e, m[1], "mark", nil, 22, "tiny")
             b:SetWidth(b.label:GetStringWidth() + 18)
             b:SetPoint("TOPLEFT", mx, -60)
-            b:SetScript("OnClick", function() slider:SetValue(m[2], true) end)
+            -- m[2]: a value, or a function giving it at click time.
+            b:SetScript("OnClick", function() slider:SetValue(type(m[2]) == "function" and m[2]() or m[2], true) end)
             mx = mx + b:GetWidth() + 4
+            parts[#parts + 1] = b
         end
         slider.onChange = function(val) valueText(v, val) end
         valueText(v, slider.value)
@@ -133,7 +140,8 @@ local function BuildEditor(page)
     e.ilvl = W.Slider(e, { min = lo, max = max(lo + 1, myIlvl), step = 1, value = lo, fill = true })
     Column(372, 300, "Minimum item level", e.ilvl, function(v, val)
         v:SetText(val > e.ilvl.lo and (val .. "+") or "Any")
-    end, { { "Any", lo }, { "Mine −10", myIlvl - 10 }, { "Mine " .. myIlvl, myIlvl } })
+    end, { { "Any", function() return e.ilvl.lo end },   -- the range's bottom, which e.Open may lower
+           { "Mine −10", myIlvl - 10 }, { "Mine " .. myIlvl, myIlvl } })
 
     -- Opening shows the listing's values; the item level range grows to hold
     -- a requirement outside it, so saving never changes what wasn't touched.
@@ -142,6 +150,7 @@ local function BuildEditor(page)
         e.ilvl.lo = min(lo, entry.ilvl > 0 and entry.ilvl - 1 or lo)
         e.ilvl.hi = max(myIlvl, entry.ilvl, e.ilvl.lo + 1)
         e.rating:SetValue(entry.rating, true)
+        for _, part in ipairs(e.parts["Minimum rating"]) do part:SetShown(entry.mplus and true or false) end
         e.ilvl:SetValue(entry.ilvl > 0 and entry.ilvl or e.ilvl.lo, true)
         e.ilvl:Layout()
     end
@@ -168,11 +177,20 @@ end
 
 local function FillBanner(entry)
     local b = G.banner
+    -- A raid or a dungeon without a key: that section's instance facts.
+    local RB = entry.raid and UI.RaidBrowse or entry.isDungeon and UI.DungeonBrowse or nil
+    local raid = RB and entry.gid and RB.Raid(entry.gid)
     local art = T.DungeonArt(entry.cid)
-    if art.bg then b:SetArt(art.bg, 2)
+    if raid and raid.art then b:SetArt(raid.art, 175 / 95, { 0.048, 0.636, 0, 0.742 })
+    elseif raid then b:SetArt(art.bg or art.lore, 2)
+    elseif art.bg then b:SetArt(art.bg, 2)
     else b:SetArt(art.lore or art.framed, 2.13, { 0.06, 0.70, 0.10, 0.70 }) end
-    b.name:SetText(entry.dungeon)
-    if entry.keyLevel then
+    b.name:SetText(raid and raid.name or entry.dungeon)
+    local diff = raid and RB.DIFF[entry.diff]
+    if diff then
+        b.key:SetText(diff.name)   -- the difficulty where a key's level goes
+        b.key.text:SetTextColor(unpack(diff.color))
+    elseif entry.keyLevel then
         b.key:SetText("+" .. entry.keyLevel)
         b.key.text:SetTextColor(unpack(T.KeyColor(entry.keyLevel)))
     else
@@ -188,6 +206,10 @@ local function FillBanner(entry)
     end
     texts[#texts + 1] = entry.ilvl > 0 and ("Item level |cfff5f7fa" .. entry.ilvl .. "+|r") or "Any item level"
     if entry.private then texts[#texts + 1] = "Private" end
+    if raid then   -- your lockout there (the group's progress)
+        local mine, color = RB.Lockout(raid)
+        texts[#texts + 1] = mine and ("Lockout " .. T.ColorCode(color) .. mine .. "|r") or "Fresh lockout"
+    end
     for i, p in ipairs(b.pills) do
         p:SetShown(texts[i] ~= nil)
         if texts[i] then p:SetText(texts[i]) end
@@ -231,7 +253,42 @@ local function BuildSlots(page)
     end)
 end
 
-local function FillSlots()
+-- A raid: the five panels count roles instead (up to 30 players), then
+-- Lust / battle res and the raid's size.
+local function FillRaidSlots(entry)
+    local members = D.GroupMembers()
+    local n = { TANK = 0, HEALER = 0, DAMAGER = 0 }
+    local lust, brez = false, false
+    for _, m in ipairs(members) do
+        n[m.role] = n[m.role] + 1
+        if m.class and ns.LUST_CLASS[m.class] then lust = true end
+        if m.class and ns.BREZ_CLASS[m.class] then brez = true end
+    end
+    local healers = entry.diff == 16 and 4 or 6
+    local rows = {
+        { "TANK", n.TANK .. " " .. (n.TANK == 1 and ROLE_NAME.TANK or "Tanks"), "a raid usually takes 2", n.TANK >= 2 },
+        { "HEALER", n.HEALER .. " " .. (n.HEALER == 1 and ROLE_NAME.HEALER or "Healers"), "usually " .. healers, n.HEALER >= healers },
+        { "DAMAGER", n.DAMAGER .. " " .. ROLE_NAME.DAMAGER, "the rest of the raid", false },
+        { nil, (lust and "|cffff9a4dBloodlust|r" or "|cff4e5a6bNo Bloodlust|r"),
+          brez and "Battle res: |cff86e0a2yes|r" or "Battle res: none yet", lust },
+        { nil, #members .. " / " .. (entry.max or 30), "players in your raid", false },
+    }
+    for i, s in ipairs(G.slots) do
+        local r = rows[i]
+        s.badge:SetShown(r[1] ~= nil)
+        if r[1] then s.badge:Set(r[1], n[r[1]] > 0 and true or nil) end
+        s.name:SetText(r[2])
+        s.name:SetTextColor(unpack(C.textHi))
+        s.sub:SetText(r[3])
+        s.bg:SetVertexColor(unpack(C.raised))
+        W.SetBorder(s, r[4] and { 0.24, 0.69, 0.38, 0.45 } or C.lineStrong)
+        s:Show()
+    end
+end
+
+local function FillSlots(entry)
+    if entry and entry.raid then FillRaidSlots(entry); return end
+    for _, s in ipairs(G.slots) do s.badge:Show() end
     local members = D.GroupMembers()
     local byRole = { TANK = {}, HEALER = {}, DAMAGER = {} }
     for _, m in ipairs(members) do table.insert(byRole[m.role], m) end
@@ -369,8 +426,11 @@ local function FillRow(row, a)
         l.name:SetText(m.name)
         l.name:SetTextColor(unpack(T.ClassColor(m.class)))
         local sub = m.spec or (m.class and LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[m.class]) or ""
-        -- What Create's "Looking for" asks for.
-        local want = UI.Create and UI.Create.State()
+        -- What Create's "Looking for" asks for (the raid page's for a raid).
+        -- Not Mythic+ (a raid, a dungeon without a key): no rating, no best run.
+        local raidListing = G.entry and not G.entry.mplus
+        local create = G.entry and (G.entry.raid and UI.RaidCreate or G.entry.isDungeon and UI.DungeonCreate) or UI.Create
+        local want = create and create.State()
         if want and ((want.lust and m.lust) or (want.brez and m.brez)) then
             sub = sub .. "  |cffe0b868LOOKING FOR|r"
         end
@@ -387,6 +447,8 @@ local function FillRow(row, a)
         else
             l.best:SetText("|cff8d98a8no run|r")
         end
+        -- A raid listing: no Mythic+ rating or best run.
+        l.rating:SetShown(not raidListing); l.rmeter:SetShown(not raidListing); l.best:SetShown(not raidListing)
         l.lust:SetShown(m.lust)
         l.brez:ClearAllPoints()
         l.brez:SetPoint("TOPLEFT", row, "TOPLEFT", X.brings + (m.lust and 26 or 0), -(ROW_PAD + (i - 1) * LINE_H) - 6)
@@ -406,9 +468,22 @@ local function FillRow(row, a)
 end
 
 local ORDER = {
-    rating = function(a, b) return a.members[1].rating > b.members[1].rating end,
-    ilvl   = function(a, b) return a.members[1].ilvl > b.members[1].ilvl end,
-    best   = function(a, b) return (a.members[1].best or 0) > (b.members[1].best or 0) end,
+    -- Ties by applicant ID: equal rows keep their places between renders.
+    rating = function(a, b)
+        local x, y = a.members[1].rating, b.members[1].rating
+        if x ~= y then return x > y end
+        return a.id < b.id
+    end,
+    ilvl   = function(a, b)
+        local x, y = a.members[1].ilvl, b.members[1].ilvl
+        if x ~= y then return x > y end
+        return a.id < b.id
+    end,
+    best   = function(a, b)
+        local x, y = a.members[1].best or 0, b.members[1].best or 0
+        if x ~= y then return x > y end
+        return a.id < b.id
+    end,
 }
 
 -------------------------------------------------------------------------------
@@ -442,7 +517,10 @@ Render = function(animate)
     G.content:SetPoint("TOPLEFT", G.editOpen and G.edit or G.banner, "BOTTOMLEFT", 0, -12)
     G.content:SetPoint("BOTTOMRIGHT", G.page, "BOTTOMRIGHT", -S.pad, 10)
     G.content:Show()
-    FillSlots()
+    FillSlots(entry)
+    -- Mythic+ columns (rating, best run here) only for a Mythic+ listing.
+    local mplus = entry.mplus
+    for k, h in pairs(G.heads) do h:SetShown(mplus or (k ~= "rating" and k ~= "best")) end
 
     local _, myIlvl = GetAverageItemLevel()
     G.ilvlBase = math.floor(D.Num(myIlvl) or 300)
@@ -493,7 +571,11 @@ ns.Live(events, { "LFG_LIST_APPLICANT_LIST_UPDATED", "LFG_LIST_APPLICANT_UPDATED
 pcall(events.RegisterEvent, events, "LFG_LIST_ACTIVE_ENTRY_UPDATE")
 events:SetScript("OnEvent", function(_, event, arg1)
     if event == "LFG_LIST_ACTIVE_ENTRY_UPDATE" then
-        if arg1 == true then G.listedAt = GetTime() end
+        if arg1 == true then
+            G.listedAt = GetTime()
+            -- Just listed (Mythic+ or raid, from + Create): straight to the applicants.
+            if UI.ActiveTab and UI.ActiveTab() == 3 and UI.SelectTab then UI.SelectTab(2) end
+        end
         if not C_LFGList.HasActiveEntryInfo() then G.listedAt = nil end
         if not (G.page and G.page:GetParent():IsVisible()) then return end   -- closed: caught up on open
     elseif event == "PLAYER_SPECIALIZATION_CHANGED" and arg1 ~= "player" then
@@ -519,10 +601,13 @@ function UI.BuildGroup(page)
     empty:SetHeight(124)
     local et = W.Text(empty, "h2"); et:SetPoint("TOPLEFT", 20, -24); et:SetText("No group listed")
     local es = W.Text(empty, "bodySm", C.muted); es:SetPoint("TOPLEFT", et, "BOTTOMLEFT", 0, -8)
-    es:SetText("List your keystone in Create; your applicants show up here.")
+    es:SetText("List your keystone or a raid in + Create; your applicants show up here.")
     local eb = W.Button(empty, "Create a group", "gold", 170, 40, "h2")
     eb:SetPoint("RIGHT", -20, 0)
     eb:SetScript("OnClick", function() if UI.SelectTab then UI.SelectTab(3) end end)
+    -- A secure overlay (UI/Window.lua) makes it prepare the listing, like the tab.
+    UI.createTargets = UI.createTargets or {}
+    table.insert(UI.createTargets, eb)
     G.emptyBox = empty
 
     -- Listed: slots, applicant header, list.
@@ -553,12 +638,14 @@ function UI.BuildGroup(page)
     end
     for _, o in ipairs(G.sorts) do o:SetVariant(G.st.sort == o.key and "ghost" or "mark") end
 
-    local heads = { { "Player", X.name }, { "Role", X.role }, { "Rating", X.rating }, { "Item level", X.ilvl },
-                    { "Best here", X.best }, { "Brings", X.brings } }
+    local heads = { { "name", "Player" }, { "role", "Role" }, { "rating", "Rating" }, { "ilvl", "Item level" },
+                    { "best", "Best here" }, { "brings", "Brings" } }
+    G.heads = {}
     for _, h in ipairs(heads) do
         local t = W.Text(content, "tiny", C.faint)
-        t:SetPoint("TOPLEFT", lbl, "BOTTOMLEFT", h[2], -14)
-        t:SetText(h[1]:upper())
+        t:SetPoint("TOPLEFT", lbl, "BOTTOMLEFT", X[h[1]], -14)
+        t:SetText(h[2]:upper())
+        G.heads[h[1]] = t
     end
 
     local scroll = CreateFrame("ScrollFrame", nil, content)

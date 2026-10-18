@@ -5,7 +5,7 @@
 --  /gotta, /gqea          open / close the window
 --  /gotta settings        the settings page (Options > AddOns)
 --  /gotta help            these commands
---  /gotta uidebug         how far + Create's preparation gets (for bug reports)
+--  /gotta welcome         the welcome screen again
 --  /gotta keyprobe        whether key levels can be read from titles (for bug reports)
 -------------------------------------------------------------------------------
 local _, ns = ...
@@ -48,7 +48,8 @@ local DEFAULTS = { showMinimap = true }
 -- nothing uses them any more.
 local LEGACY = { "enabled", "width", "height", "dimPercent", "dimAlpha", "showLeaderScore", "showDungeonIcon",
                  "showBadges", "fitParty", "fitLust", "fitBrez", "fitNotDeclined", "presets", "createPresets",
-                 "createLookTitle", "keyMin", "keyMax", "uidebug", "keyprobe", "createTitlePlaystyle",
+                 "createLookTitle", "keyMin", "keyMax", "keyprobe", "raidprobe", "raidcreate", "raidlist", "uidebug",
+                 "createTitlePlaystyle",
                  "createLust", "createBrez", "moreOpen" }
 
 local function LoadDB()
@@ -177,6 +178,9 @@ events:SetScript("OnEvent", function(self)
     local ok, err = pcall(RegisterSettings)
     if not ok then ns.Print("settings page unavailable (" .. tostring(err) .. ")") end
     if C_MythicPlus and C_MythicPlus.RequestMapInfo then C_MythicPlus.RequestMapInfo() end
+    -- The Group Finder's activities: Blizzard builds its category buttons
+    -- (which + Create clicks) and its dungeon list from them.
+    if C_LFGList.RequestAvailableActivities then C_LFGList.RequestAvailableActivities() end
 end)
 
 SLASH_GOTTAQUEUEEMALL1 = "/gotta"
@@ -185,8 +189,8 @@ local function Help()
     ns.Print("commands:")
     print("  /gotta  -  open / close the window (also /gqea)")
     print("  /gotta settings  -  the settings page")
+    print("  /gotta welcome  -  the welcome screen again")
     print("  /gotta keyprobe  -  check whether key levels can be read (for bug reports)")
-    print("  /gotta uidebug  -  check the + Create preparation (for bug reports)")
 end
 
 SlashCmdList.GOTTAQUEUEEMALL = function(msg)
@@ -196,8 +200,8 @@ SlashCmdList.GOTTAQUEUEEMALL = function(msg)
         if ns.UI and ns.UI.Toggle then ns.UI.Toggle() end
     elseif msg == "settings" or msg == "options" or msg == "config" then
         ns.OpenSettings()
-    elseif msg == "uidebug" and ns.UI and ns.UI.Debug then
-        ns.UI.Debug()
+    elseif msg == "welcome" and ns.UI and ns.UI.ShowWelcome then
+        ns.UI.ShowWelcome()
     elseif msg == "keyprobe" and ns.UI and ns.UI.KeyProbe then
         ns.UI.KeyProbe.Run()
     else

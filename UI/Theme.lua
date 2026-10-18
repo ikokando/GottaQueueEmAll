@@ -162,7 +162,7 @@ end
 -------------------------------------------------------------------------------
 local artCache = {}
 
-local function JournalInstance(name, instanceMap)
+local function JournalInstance(name, instanceMap, isRaid)
     if instanceMap and C_EncounterJournal and C_EncounterJournal.GetInstanceForGameMap then
         local id = C_EncounterJournal.GetInstanceForGameMap(instanceMap)
         if id then return id end
@@ -175,7 +175,7 @@ local function JournalInstance(name, instanceMap)
         EJ_SelectTier(tier)
         local i = 1
         while not found do
-            local id, n = EJ_GetInstanceByIndex(i, false)
+            local id, n = EJ_GetInstanceByIndex(i, isRaid and true or false)
             if not id then break end
             if n == name then found = id end
             i = i + 1
@@ -185,6 +185,7 @@ local function JournalInstance(name, instanceMap)
     if current then EJ_SelectTier(current) end
     return found
 end
+T.JournalInstance = JournalInstance
 
 -- Returns { bg, lore, button, framed, icon } (file IDs, any may be nil):
 -- bg = the journal's large background, lore = its small framed lore art,

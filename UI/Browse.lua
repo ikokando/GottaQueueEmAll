@@ -16,6 +16,8 @@ local C, S = T.C, T.S
 local floor, max, min = math.floor, math.max, math.min
 
 local CARD_H, CARD_GAP = 86, 8
+local SPEC_H = 14     -- the spec names under the role glyphs (Spec view)
+local SPEC_GAP = 18   -- between glyphs in the Spec view: each name gets 24 + 18 px, centered
 local STRIP_W = 136
 local ROLE_NAME = { TANK = TANK or "Tank", HEALER = HEALER or "Healer", DAMAGER = DAMAGER or "Damage" }
 local SORTS = { { "key", "Key" }, { "rating", "Rating" }, { "best", "Leader best" }, { "age", "Newest" } }
@@ -45,22 +47,33 @@ end
 
 local Render, MarkDirty   -- forward
 
+-- Members with their spec (W.SpecView): the cards grow by a line.
+local function CardH() return CARD_H + (W.SpecView() and SPEC_H or 0) end
+
 -------------------------------------------------------------------------------
 --  Dungeon chips
 -------------------------------------------------------------------------------
 local function BuildChips()
     local st = B.st
     local groups = ns.SeasonGroups and ns.SeasonGroups() or {}
-    -- Rebuild only when the season's dungeons changed (the event fires often).
-    local ids = {}
-    for _, g in ipairs(groups) do ids[#ids + 1] = g.id end
-    local key = table.concat(ids, ",")
+    -- Rebuild only when the season's dungeons or your best keys changed (the
+    -- events fire often).
+    local ids, parts = {}, {}
+    for _, g in ipairs(groups) do
+        ids[#ids + 1] = g.id
+        local level, timed = ns.BestKey and ns.BestKey(g.cid)
+        parts[#parts + 1] = g.id .. ":" .. tostring(level) .. tostring(timed)
+    end
+    local key = table.concat(parts, ",")
     if B.chipKey == key and #B.chips > 0 then return end
     B.chipKey = key
-    -- Picks from an earlier season would filter every search to nothing.
-    local current = {}
-    for _, id in ipairs(ids) do current[id] = true end
-    for id in pairs(st.dungeons) do if not current[id] then st.dungeons[id] = nil end end
+    -- Picks from an earlier season would filter every search to nothing (an
+    -- empty list: not loaded yet, keep them).
+    if #ids > 0 then
+        local current = {}
+        for _, id in ipairs(ids) do current[id] = true end
+        for id in pairs(st.dungeons) do if not current[id] then st.dungeons[id] = nil end end
+    end
 
     for _, c in ipairs(B.chips) do c:Hide() end
     B.chips = {}
@@ -180,10 +193,12 @@ local function DoSearch()
     if B.searching then return end
     local ok, err = pcall(D.Search, B.st)
     if not ok then
+        D.SearchAs(nil)
         ns.Print("search failed (" .. tostring(err) .. ")")
         return
     end
     B.searching, B.dirty, B.ownSearch = true, false, true
+    B.searchedMin = B.st.minRating or 0   -- the server left out groups below this
     B.searchSeq = (B.searchSeq or 0) + 1
     local seq = B.searchSeq
     PaintSearch()
@@ -238,7 +253,11 @@ local function BuildFilters(bar, row2)
     s1:SetPoint("TOPLEFT", B.hist, "BOTTOMLEFT"); s1:SetPoint("TOPRIGHT", B.hist, "BOTTOMRIGHT")
     s1.onChange = function(v)
         st.minRating = v
-        RatingText(v); UpdateHistogram(); MarkDirty()
+        RatingText(v); UpdateHistogram()
+        -- Raised: the groups found are filtered here at once. Lowered below the
+        -- last search's minimum: groups the server left out need a new search.
+        if v < (B.searchedMin or 0) then MarkDirty() end
+        Render()
     end
     local a = W.Text(p1, "tiny"); a:SetPoint("TOPLEFT", s1, "BOTTOMLEFT", 0, -1); a:SetText("0")
     if s1.marker then   -- under your own rating's mark
@@ -313,6 +332,9 @@ local function BuildFilters(bar, row2)
         right = b
     end
     local sl = W.Text(row2, "small"); sl:SetPoint("RIGHT", right, "LEFT", -8, 0); sl:SetText("Sort")
+    -- Members: role glyphs, or with their specs.
+    local view = W.ViewSwitch(row2, function() Render() end)
+    view:SetPoint("RIGHT", sl, "LEFT", -16, 0)
     PaintSorts()
     PaintSearch()
 end
@@ -334,6 +356,12 @@ local function Tooltip(card)
                 .. (m.leader and "  |cffd2a24c(leader)|r" or ""),
             ROLE_NAME[m.role], col[1], col[2], col[3], 0.6, 0.65, 0.72)
     end
+    local open, spots = D.OpenSpots(r), {}
+    for _, role in ipairs(D.ROLE_KEYS) do
+        local n = open[role] or 0
+        if n > 0 then spots[#spots + 1] = (n > 1 and (n .. " ") or "") .. ROLE_NAME[role] end
+    end
+    if #spots > 0 then GameTooltip:AddLine("Open: " .. table.concat(spots, ", "), 0.6, 0.65, 0.72) end
     -- The leader's Raider.IO profile (if installed).
     if r.leaderFull then
         GameTooltip:AddLine(" ")
@@ -357,7 +385,7 @@ end
 
 local function NewCard(parent)
     local c = W.Card(parent)
-    c:SetHeight(CARD_H)
+    c:SetHeight(CardH())
     c.strip = c:CreateTexture(nil, "ARTWORK")
     c.strip:SetPoint("TOPLEFT"); c.strip:SetPoint("BOTTOMLEFT"); c.strip:SetWidth(STRIP_W)
     W.CornerCaps(c, c.strip, C.bg, { TL = true, BL = true })
@@ -385,12 +413,16 @@ local function NewCard(parent)
     c.name = W.Text(c, "h2"); c.name:SetPoint("TOPLEFT", c.strip, "TOPRIGHT", 14, -10)
     c.title = W.Text(c, "body", C.text2); c.title:SetPoint("BOTTOMLEFT", c.name, "BOTTOMRIGHT", 10, 0)
     c.line2 = W.Text(c, "bodySm"); c.line2:SetPoint("TOPLEFT", c.name, "BOTTOMLEFT", 0, -6)
-    c.slots = {}
+    c.slots, c.specs = {}, {}
     for i = 1, 5 do
         local rb = W.RoleBadge(c, 24)
-        if i == 1 then rb:SetPoint("TOPLEFT", c.line2, "BOTTOMLEFT", 0, -6)
-        else rb:SetPoint("LEFT", c.slots[i - 1], "RIGHT", 4, 0) end
+        if i == 1 then rb:SetPoint("TOPLEFT", c.line2, "BOTTOMLEFT", 0, -6) end   -- the others: FillCard (gap by view)
         c.slots[i] = rb
+        local sp = W.Text(c, "tiny")
+        sp:SetPoint("TOP", rb, "BOTTOM", 0, -2)
+        sp:SetWidth(24 + SPEC_GAP - 2)   -- its own column: never runs into the next name
+        sp:SetJustifyH("CENTER")
+        c.specs[i] = sp
     end
     c.lust = W.Glyph(c, "lust", 24, C.lust)
     c.brez = W.Glyph(c, "brez", 24, C.brez)
@@ -461,15 +493,27 @@ local function FillCard(c, r)
     local slots = {}
     for _, role in ipairs(D.ROLE_KEYS) do
         -- true = filled, class unreadable.
-        for _, m in ipairs(r.members) do if m.role == role then slots[#slots + 1] = { role, m.class or true } end end
+        for _, m in ipairs(r.members) do if m.role == role then slots[#slots + 1] = { role, m.class or true, m.spec } end end
     end
     local open = D.OpenSpots(r)
     for _, role in ipairs(D.ROLE_KEYS) do
         for _ = 1, open[role] or 0 do slots[#slots + 1] = { role } end
     end
+    local spec = W.SpecView()
+    c:SetHeight(CardH())
     for i, rb in ipairs(c.slots) do
         local s = slots[i]
+        if i > 1 then
+            rb:ClearAllPoints()
+            rb:SetPoint("LEFT", c.slots[i - 1], "RIGHT", spec and SPEC_GAP or 4, 0)   -- room for the names
+        end
         if s then rb:Set(s[1], s[2]); rb:Show() else rb:Hide() end
+        local sp = c.specs[i]
+        sp:SetShown(spec and s and s[3] ~= nil or false)
+        if s and s[3] then
+            sp:SetText(W.SpecShort(s[3]))
+            sp:SetTextColor(unpack(type(s[2]) == "string" and T.ClassColor(s[2]) or C.muted))
+        end
     end
     local anchor = c.slots[min(5, max(1, #slots))]
     c.lust:ClearAllPoints(); c.brez:ClearAllPoints(); c.style:ClearAllPoints()
@@ -504,7 +548,11 @@ local ORDER = {
         return a.id < b.id
     end,
     rating = function(a, b) if a.rating ~= b.rating then return a.rating > b.rating end return a.id < b.id end,
-    best   = function(a, b) if (a.best or 0) ~= (b.best or 0) then return (a.best or 0) > (b.best or 0) end return a.rating > b.rating end,
+    best   = function(a, b)
+        if (a.best or 0) ~= (b.best or 0) then return (a.best or 0) > (b.best or 0) end
+        if a.rating ~= b.rating then return a.rating > b.rating end
+        return a.id < b.id
+    end,
     -- Listing time, not age: ages were read at different moments.
     age    = function(a, b)
         local la, lb = a.readAt - a.age, b.readAt - b.age
@@ -526,7 +574,7 @@ Render = function(animate)
     for i, r in ipairs(list) do
         local c = B.cards[i] or NewCard(B.child)
         B.cards[i] = c
-        local y = -(i - 1) * (CARD_H + CARD_GAP)
+        local y = -(i - 1) * (CardH() + CARD_GAP)
         c:ClearAllPoints()
         c:SetPoint("TOPLEFT", B.child, "TOPLEFT", 0, y)
         c:SetPoint("TOPRIGHT", B.child, "TOPRIGHT", 0, y)
@@ -535,7 +583,7 @@ Render = function(animate)
         if animate and i <= 8 then A.Rise(c, (i - 1) * 0.04, 8, 0.35) end
     end
     for i = #list + 1, #B.cards do B.cards[i]:Hide() end
-    B.child:SetHeight(max(1, #list * (CARD_H + CARD_GAP)))
+    B.child:SetHeight(max(1, #list * (CardH() + CARD_GAP)))
     local limit = max(0, B.child:GetHeight() - B.scroll:GetHeight())
     if B.scroll:GetVerticalScroll() > limit then B.scroll:SetVerticalScroll(limit) end
 
@@ -565,6 +613,18 @@ end
 --  Data in
 -------------------------------------------------------------------------------
 local function Load()
+    -- Hidden (another section or tab): read the results when shown.
+    if not (B.page and B.page:IsVisible()) then B.loadPending = true; return end
+    B.loadPending = false
+    -- Another section searched (Raid, Mythic 0): the client holds one result
+    -- list, so ours is gone (its IDs may now point at other groups). Empty
+    -- until the next Mythic+ search.
+    if not D.OwnsResults("mplus", D.CATEGORY, true) then
+        wipe(B.results)
+        B.searched, B.total, B.sent = false, nil, nil
+        Render()
+        return
+    end
     if B.keySlider then PaintKeyPanel() end   -- the reader may have come on since
     if UI.KeyRead then UI.KeyRead.Reset() end
     wipe(B.results)
@@ -593,17 +653,19 @@ end
 local pendingUpdate = {}
 local function Flush()
     B.flushQueued = false
+    local changed = false
     for id in pairs(pendingUpdate) do
         for i, r in ipairs(B.results) do
             if r.id == id then
                 local fresh = D.Read(id)
                 if fresh then B.results[i] = fresh else table.remove(B.results, i) end
+                changed = true
                 break
             end
         end
     end
     wipe(pendingUpdate)
-    Render()
+    if changed then Render() end   -- updates come in all the time, most for other lists
 end
 
 local function Queue(id)
@@ -635,15 +697,17 @@ events:SetScript("OnEvent", function(_, event, arg1)
         -- Next frame: the result list is complete by then.
         C_Timer.After(0, Load)
     elseif event == "LFG_LIST_SEARCH_FAILED" then
+        if B.searching then ns.Print("search failed" .. (D.Str(arg1) and (" (" .. arg1 .. ")") or "") .. ".") end
         B.searching = false
         PaintSearch()
-        ns.Print("search failed" .. (D.Str(arg1) and (" (" .. arg1 .. ")") or "") .. ".")
     elseif event == "LFG_LIST_SEARCH_RESULT_UPDATED" or event == "LFG_LIST_APPLICATION_STATUS_UPDATED" then
         Queue(arg1)
     elseif event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_SPECIALIZATION_CHANGED" then
         if event == "PLAYER_SPECIALIZATION_CHANGED" and arg1 ~= "player" then return end
         D.ResetParty()
         PaintSpot()
+        -- "Spot for <role>" goes to the server: a new role wants a new search.
+        if event == "PLAYER_SPECIALIZATION_CHANGED" and B.st.spot then MarkDirty() end
         Render()
     elseif event == "CHALLENGE_MODE_MAPS_UPDATE" then
         D.ResetMaps()
@@ -703,7 +767,7 @@ function UI.BuildBrowse(page)
     scroll:EnableMouseWheel(true)
     scroll:SetScript("OnMouseWheel", function(self, d)
         local limit = max(0, B.child:GetHeight() - self:GetHeight())
-        self:SetVerticalScroll(min(limit, max(0, self:GetVerticalScroll() - d * (CARD_H + CARD_GAP))))
+        self:SetVerticalScroll(min(limit, max(0, self:GetVerticalScroll() - d * (CardH() + CARD_GAP))))
     end)
     B.scroll = scroll
 
@@ -713,7 +777,12 @@ function UI.BuildBrowse(page)
     -- Ages and "last search" tick while the tab is visible.
     page:SetScript("OnShow", function()
         PaintKeyPanel()   -- first: it tests the key reader before any title is read
-        if B.stale then
+        if B.loadPending then   -- a search answered while this page was hidden
+            B.stale = false
+            D.ResetParty(); D.ResetMaps()
+            PaintSpot()
+            Load()
+        elseif B.stale then
             -- The window was closed (no events then; Window.lua sets B.stale): catch up.
             B.stale = false
             D.ResetParty(); D.ResetMaps()

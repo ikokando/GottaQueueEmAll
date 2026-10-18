@@ -22,9 +22,32 @@ local canaccess = canaccesstable or function() return true end
 local function Num(v) return type(v) == "number" and not issecret(v) and v or nil end
 local function Str(v) return type(v) == "string" and not issecret(v) and v or nil end
 local function Tab(v) return type(v) == "table" and not issecret(v) and canaccess(v) and v or nil end
-D.Num, D.Str = Num, Str
+D.Num, D.Str, D.Tab = Num, Str, Tab
 
 D.CATEGORY = GROUP_FINDER_CATEGORY_ID_DUNGEONS or 2
+D.RAID_CATEGORY = GROUP_FINDER_CATEGORY_ID_RAIDS or 3
+D.CUSTOM_CATEGORY = GROUP_FINDER_CATEGORY_ID_CUSTOM or 6
+
+-- Who searched last: the client keeps one result list, and each section
+-- reads only its own. A page calls D.SearchAs(key) right before its search;
+-- a search without it (Blizzard's window) belongs to nobody here but the
+-- section that owns its category by default (Mythic+ for Dungeons, Raid
+-- for Raids).
+local pendingOwner
+function D.SearchAs(key) pendingOwner = key end
+hooksecurefunc(C_LFGList, "Search", function(category)
+    D.searchCategory = Num(category)
+    D.searchOwner = pendingOwner
+    pendingOwner = nil
+end)
+
+-- The last search's results are this section's (key; category; true when
+-- it takes searches of its category made outside this window).
+function D.OwnsResults(key, category, takesForeign)
+    if D.searchOwner then return D.searchOwner == key end
+    if not D.searchCategory then return true end   -- no search seen yet: whatever the client holds
+    return takesForeign and D.searchCategory == category or false
+end
 
 local LUST, BREZ = ns.LUST_CLASS, ns.BREZ_CLASS
 local DECLINED = { declined = true, declined_delisted = true, declined_full = true }
@@ -208,6 +231,9 @@ end
 -- st: keyMin, keyMax, expMin, expMax, fitLust, fitBrez, notDeclined.
 function D.Fits(r, st)
     local p = D.Party()
+    -- Minimum leader rating: the server filters by it too, but only on the
+    -- next search; here it applies to the groups already found at once.
+    if (st.minRating or 0) > 0 and (r.rating or 0) < st.minRating then return false end
     -- Key level, when the title could be measured; the top end is open at
     -- +20 too. Titles that couldn't be measured (custom text) stay.
     if r.key and (st.keyMin > 2 or st.keyMax < 20) then
@@ -264,6 +290,7 @@ function D.Search(st)
     local f = D.Filter(st)
     C_LFGList.SaveAdvancedFilter(f)
     local langs = C_LFGList.GetLanguageSearchFilter and C_LFGList.GetLanguageSearchFilter() or {}
+    D.SearchAs("mplus")
     C_LFGList.Search(D.CATEGORY, 0, 0, langs, nil, f)
 end
 
@@ -304,6 +331,13 @@ function D.Entry()
         autoAccept = e.autoAccept == true, crossFaction = e.isCrossFactionListing == true,
         newPlayerFriendly = e.newPlayerFriendly == true, questID = Num(e.questID),
     }
+    -- A raid, or a dungeon without a keystone: its activity group (the
+    -- instance), difficulty and size.
+    if ai and (Num(ai.categoryID) == D.RAID_CATEGORY or (Num(ai.categoryID) == D.CATEGORY and not r.mplus)) then
+        r.raid = Num(ai.categoryID) == D.RAID_CATEGORY
+        r.isDungeon = not r.raid
+        r.gid, r.diff, r.max = Num(ai.groupFinderActivityGroupID), Num(ai.difficultyID), Num(ai.maxNumPlayers)
+    end
     -- The keystone in your bags, when it is the listed one.
     local kAct, _, kLevel = C_LFGList.GetOwnedKeystoneActivityAndGroupAndLevel()
     if Num(kAct) and kAct == act then r.keyLevel = Num(kLevel) end
@@ -352,26 +386,58 @@ function D.FormReady(act)
     return Num(ec.selectedActivity) == act
 end
 
--- Blizzard's Dungeons button on its category page. Blizzard builds these
--- buttons at login (LFG_LIST_AVAILABILITY_UPDATE), before its window opens.
-function D.DungeonCategoryButton()
+-- Blizzard's button for a category (Dungeons by default) on its category
+-- page. Blizzard builds these at login (LFG_LIST_AVAILABILITY_UPDATE),
+-- before its window opens. Raids has two: current (filters 1) and older.
+function D.CategoryButton(category)
+    category = category or D.CATEGORY
     local cs = LFGListFrame and LFGListFrame.CategorySelection
-    local first
+    local first, plain
     for _, b in ipairs(cs and cs.CategoryButtons or {}) do
-        if b.categoryID == D.CATEGORY then
-            if (b.filters or 0) == 0 then return b end
+        if b.categoryID == category then
             first = first or b
+            if (b.filters or 0) == 0 then plain = plain or b end
         end
     end
+    if category == D.CATEGORY then return plain or first end
     return first
 end
 
--- Can Start a Group run? Start a Group needs Dungeons selected on Blizzard's
+-- Can Start a Group run? It needs the category selected on Blizzard's
 -- category page; the + Create click selects it first when the button exists.
-function D.CanStart()
+function D.CanStart(category)
+    category = category or D.CATEGORY
     local cs = LFGListFrame and LFGListFrame.CategorySelection
     if not (cs and cs.StartGroupButton) then return false end
-    return cs.selectedCategory == D.CATEGORY or D.DungeonCategoryButton() ~= nil
+    return cs.selectedCategory == category or D.CategoryButton(category) ~= nil
+end
+
+-- Blizzard's Start a Group form, when it is open on that category (raids by
+-- default): the title typed there ("" when none yet), else nil.
+function D.FormTitle(category)
+    local ec = LFGListFrame and LFGListFrame.EntryCreation
+    if not (ec and ec:IsShown() and Num(ec.selectedCategory) == (category or D.RAID_CATEGORY)) then return end
+    local ok, text = pcall(function() return ec.Name and ec.Name:GetText() end)
+    text = ok and Str(text) or ""
+    -- On Dungeons Blizzard writes your keystone's title in ("+14 Relaxed", a
+    -- K-string): that's no title of yours, a Mythic 0 group needs its own.
+    if text:find("|K", 1, true) then return "" end
+    return strtrim(text)
+end
+
+-- A raid listing: any raid activity (tested in 12.1.5: it need not be the
+-- form's); the title stays what was typed into Blizzard's form.
+-- st: playstyle, ilvl, private, ownFaction.
+function D.CreateRaidListing(act, st)
+    C_LFGList.CreateListing({
+        activityIDs = { act },
+        generalPlaystyle = st.playstyle,
+        requiredItemLevel = st.ilvl or 0,
+        isPrivateGroup = st.private and true or false,
+        isCrossFactionListing = not st.ownFaction,
+        isAutoAccept = false,
+        newPlayerFriendly = false,
+    })
 end
 
 -- st: playstyle, rating, ilvl, private, ownFaction.
@@ -498,7 +564,12 @@ function D.GroupMembers()
         out[#out + 1] = m
     end
     Add("player")
-    if not IsInRaid() then
+    if IsInRaid() then
+        for i = 1, GetNumGroupMembers() do
+            local unit = "raid" .. i
+            if not UnitIsUnit(unit, "player") then Add(unit) end
+        end
+    else
         for i = 1, 4 do Add("party" .. i) end
     end
     return out

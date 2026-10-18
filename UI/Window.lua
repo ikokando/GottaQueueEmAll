@@ -18,21 +18,22 @@ local win
 -- close button look) or the gear.
 local function IconButton(parent, kind)
     local b = CreateFrame("Button", nil, parent)
-    b:SetSize(32, 32)
-    b.bg = W.Tex(b, "BACKGROUND", { 0.63, 0.71, 0.84, 0 })
+    b:SetSize(36, 36)
+    b:SetHitRectInsets(-4, -4, -6, -6)   -- clicks a little beyond the drawn square count too
+    b.bg = W.Round(b, "BACKGROUND", { 0.63, 0.71, 0.84, 0 })
     b.bg:SetAllPoints()
     local parts = {}
     if kind == "close" then
         for i, rot in ipairs({ 45, -45 }) do
             local t = W.Tex(b, "ARTWORK", C.muted)
-            t:SetSize(14, 1.6)
+            t:SetSize(18, 2)
             t:SetPoint("CENTER")
             t:SetRotation(math.rad(rot))
             parts[i] = t
         end
     else
         local t = b:CreateTexture(nil, "ARTWORK")
-        t:SetSize(17, 17)
+        t:SetSize(30, 30)   -- the atlas has a wide margin: drawn, the cog is about 20
         t:SetPoint("CENTER")
         if C_Texture.GetAtlasInfo("GM-icon-settings") then t:SetAtlas("GM-icon-settings")
         else t:SetTexture("Interface\\Icons\\INV_Misc_Gear_01") end
@@ -140,7 +141,33 @@ local function Build()
     title:SetText("Gotta Queue 'Em All")
     local subtitle = W.Text(head, "small")
     subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -2)
-    subtitle:SetText("Mythic+")
+    win.subtitle = subtitle
+
+    -- Section switch: Mythic+ / Raid / Mythic 0, then PvP (announced).
+    win.sectionButtons = {}
+    local prev
+    for _, s in ipairs({ { "mplus", "Mythic+" }, { "raid", "Raid" }, { "dungeon", "Mythic 0" } }) do
+        local b = W.Button(head, s[2], "mark", nil, 30, "button")
+        b:SetWidth(b.label:GetStringWidth() + 28)
+        -- Follows the title's width (it grows once the font file is loaded).
+        if prev then b:SetPoint("LEFT", prev, "RIGHT", 4, 0)
+        else b:SetPoint("LEFT", title, "RIGHT", 28, -8) end
+        b:SetScript("OnClick", function() UI.SetSection(s[1]) end)
+        win.sectionButtons[s[1]] = b
+        prev = b
+    end
+    -- PvP: announced, not there yet.
+    local pvp = W.Button(head, "PvP  |cff8d98a8SOON|r", "mark", nil, 30, "button")
+    pvp:SetWidth(pvp.label:GetStringWidth() + 28)
+    pvp:SetPoint("LEFT", prev, "RIGHT", 4, 0)
+    pvp:Disable()   -- greyed out, no hover; the tooltip still shows
+    pvp:HookScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:SetText("PvP: coming soon", 1, 1, 1)
+        GameTooltip:AddLine("Arena and rated battleground groups, in this window.", 0.85, 0.85, 0.85, true)
+        GameTooltip:Show()
+    end)
+    pvp:HookScript("OnLeave", function() GameTooltip:Hide() end)
 
     local close = IconButton(head, "close")
     close:SetPoint("RIGHT", -12, 0)
@@ -163,9 +190,24 @@ local function Build()
         p:Hide()
         win.pages[i] = p
     end
-    UI.BuildBrowse(win.pages[1])
+    -- Browse and + Create hold one page per section (Mythic+, Raid, Mythic 0); Your
+    -- Group shows whichever listing you have.
+    win.sections, win.createSections = {}, {}
+    for _, key in ipairs({ "mplus", "dungeon", "raid" }) do
+        for _, pair in ipairs({ { win.sections, 1 }, { win.createSections, 3 } }) do
+            local f = CreateFrame("Frame", nil, win.pages[pair[2]])
+            f:SetAllPoints()
+            f:Hide()
+            pair[1][key] = f
+        end
+    end
+    UI.BuildBrowse(win.sections.mplus)
+    UI.BuildDungeonBrowse(win.sections.dungeon)
+    UI.BuildRaidBrowse(win.sections.raid)
     UI.BuildGroup(win.pages[2])
-    UI.BuildCreate(win.pages[3])
+    UI.BuildCreate(win.createSections.mplus)
+    UI.BuildDungeonCreate(win.createSections.dungeon)
+    UI.BuildRaidCreate(win.createSections.raid)
 
     win.tabs = W.Tabs(win, names, function(i)
         for j, p in ipairs(win.pages) do p:SetShown(j == i) end
@@ -194,34 +236,93 @@ local function Build()
     end
     local category = Helper("GQEACreateCategory")
     local helper = Helper("GQEACreateStart")
+    -- Towards the section's category: Dungeons (Mythic+ and the Dungeons
+    -- section) or Raids.
     local function WireStart()
         if InCombatLockdown() then return end
+        local D = UI.Data
+        -- Mythic 0 prepares Custom's form: on Dungeons Blizzard would pick
+        -- your keystone and title the group "+14".
+        local cat = ({ raid = D.RAID_CATEGORY, dungeon = D.CUSTOM_CATEGORY })[Saved().section] or D.CATEGORY
         local cs = LFGListFrame and LFGListFrame.CategorySelection
-        local dungeons = UI.Data.DungeonCategoryButton()
-        category:SetAttribute("clickbutton", dungeons)
-        -- Only towards Dungeons: else Blizzard would prepare another category.
-        local ok = cs and cs.StartGroupButton and (dungeons or cs.selectedCategory == UI.Data.CATEGORY)
+        local button = D.CategoryButton(cat)
+        -- No category buttons yet (Blizzard builds them from the activity
+        -- list): ask for it; the next click finds them.
+        if not button and C_LFGList.RequestAvailableActivities then C_LFGList.RequestAvailableActivities() end
+        category:SetAttribute("clickbutton", button)
+        -- Only towards that category: else Blizzard would prepare another one.
+        local ok = cs and cs.StartGroupButton and (button or cs.selectedCategory == cat)
         helper:SetAttribute("clickbutton", ok and cs.StartGroupButton or nil)
     end
+    win.WireStart = WireStart
     WireStart()
-    local tab = win.tabs.tabs[3]
-    local over = CreateFrame("Button", "GQEACreateTab", tab, "SecureActionButtonTemplate")
-    over:SetAllPoints(tab)
-    over:RegisterForClicks("AnyUp", "AnyDown")
-    over:SetAttribute("type1", "macro")
-    over:SetAttribute("macrotext1", "/click GQEACreateCategory\n/click GQEACreateStart")
-    -- The secure action fires on down or up (ActionButtonUseKeyDown): act on that one.
+    -- A secure overlay that runs the + Create preparation, on the tab and on
+    -- every "prepare" button of the pages (UI.createTargets: Your Group's
+    -- "Create a group", the title box prompts).
     local function ActsOn(down) return (down and true or false) == GetCVarBool("ActionButtonUseKeyDown") end
-    over:SetScript("PreClick", function(_, _, down)
-        if not ActsOn(down) then return end
-        WireStart()
-        win.tabs:Select(3)
-    end)
-    over:SetScript("PostClick", function(_, _, down)
-        if ActsOn(down) and UI.Create then C_Timer.After(0.1, UI.Create.Refresh) end
-    end)
-    over:SetScript("OnEnter", function() local f = tab:GetScript("OnEnter"); if f then f(tab) end end)
-    over:SetScript("OnLeave", function() local f = tab:GetScript("OnLeave"); if f then f(tab) end end)
+    -- floating: the target's layout hangs off text (a label), and a protected
+    -- frame may not be anchored to text, not even through other frames. Such
+    -- an overlay is a child of the window, placed over its target by numbers
+    -- whenever the target shows, moves or resizes (out of combat).
+    local floats = {}
+    local function Trigger(target, name, floating)
+        local over = CreateFrame("Button", name, floating and win or target, "SecureActionButtonTemplate")
+        if floating then
+            local function Place()
+                if InCombatLockdown() then return end
+                local l, b, wl, wb = target:GetLeft(), target:GetBottom(), win:GetLeft(), win:GetBottom()
+                if not (target:IsVisible() and l and wl) then over:Hide(); return end
+                over:ClearAllPoints()
+                over:SetPoint("BOTTOMLEFT", win, "BOTTOMLEFT", l - wl, b - wb)
+                over:SetSize(target:GetWidth(), target:GetHeight())
+                over:SetFrameLevel(target:GetFrameLevel() + 10)
+                over:Show()
+            end
+            local function Later() C_Timer.After(0, Place) end
+            target:HookScript("OnShow", Later)
+            target:HookScript("OnSizeChanged", Later)
+            target:HookScript("OnHide", function() if not InCombatLockdown() then over:Hide() end end)
+            floats[#floats + 1] = Later
+            over:Hide()
+        else
+            over:SetAllPoints(target)
+            over:SetFrameLevel(target:GetFrameLevel() + 10)
+        end
+        over:RegisterForClicks("AnyUp", "AnyDown")
+        over:SetAttribute("type1", "macro")
+        over:SetAttribute("macrotext1", "/click GQEACreateCategory\n/click GQEACreateStart")
+        -- The secure action fires on down or up (ActionButtonUseKeyDown): act on that one.
+        over:SetScript("PreClick", function(_, _, down)
+            if not ActsOn(down) then return end
+            WireStart()
+            -- After a delist Blizzard can leave Start a Group disabled while its
+            -- window is closed (it refreshes the button only on its own events),
+            -- and a disabled button ignores the click. Nothing stands against it
+            -- here: enable it, so the macro's click goes through.
+            local cs = LFGListFrame and LFGListFrame.CategorySelection
+            local start = cs and cs.StartGroupButton
+            if start and not start:IsEnabled() and not InCombatLockdown() and not C_LFGList.HasActiveEntryInfo()
+               and UI.Data.CanApply() then
+                start:Enable()
+            end
+            win.tabs:Select(3)
+        end)
+        over:SetScript("PostClick", function(_, _, down)
+            if not ActsOn(down) then return end
+            -- Blizzard's window closes again and its title box moves in.
+            local page = ({ raid = UI.RaidCreate, dungeon = UI.DungeonCreate })[Saved().section] or UI.Create
+            if page then C_Timer.After(0.1, page.AfterStart or page.Refresh) end
+        end)
+        over:SetScript("OnEnter", function() local f = target:GetScript("OnEnter"); if f then f(target) end end)
+        over:SetScript("OnLeave", function() local f = target:GetScript("OnLeave"); if f then f(target) end end)
+        return over
+    end
+    Trigger(win.tabs.tabs[3], "GQEACreateTab")
+    for _, target in ipairs(UI.createTargets or {}) do Trigger(target, nil, true) end
+    -- The window resized or moved: the floating overlays follow.
+    local function PlaceAll() for _, f in ipairs(floats) do f() end end
+    win:HookScript("OnSizeChanged", PlaceAll)
+    win.PlaceFloats = PlaceAll   -- and when it opens (its OnShow, below)
 
     -- Footer
     local foot = CreateFrame("Frame", nil, win)
@@ -246,21 +347,49 @@ local function Build()
             T.ColorCode(T.RatingColor(score)), score, math.floor(UI.Data.Num(ilvl) or 0)))
     end
 
+    -- First start: the welcome screen over the pages.
+    UI.Welcome.Build(win, function(key)
+        UI.Welcome.Done()
+        UI.SetSection(key)
+    end)
+
     SizeGrip()
     -- Events and the combat watch only while the window is open.
     win:SetScript("OnShow", function()
         ns.SetLive(true)
         PaintMe()
+        if win.PlaceFloats then win.PlaceFloats() end
         FitScale()
         A.FadeIn(win, 0.18)
         if UI.Group and UI.Group.Refresh then UI.Group.Refresh() end
     end)
     win:SetScript("OnHide", function()
         ns.SetLive(false)
-        if UI.Browse then UI.Browse.stale = true end   -- its results catch up on the next show
+        -- No events while closed: each results page catches up on its next show.
+        for _, p in ipairs({ UI.Browse, UI.RaidBrowse, UI.DungeonBrowse }) do p.stale = true end
     end)
     win.tabs:Select(1, true)
     for j, p in ipairs(win.pages) do p:SetShown(j == 1) end
+    local section = Saved().section
+    UI.SetSection(win.sections[section] and section or "mplus", true)
+    if UI.Welcome.Due() then UI.Welcome.Show() end
+end
+
+-- Mythic+ or Raid: which Browse page shows (saved per account).
+local SECTION_NAME = { mplus = "Mythic+", dungeon = "Mythic 0", raid = "Raid" }
+function UI.SetSection(key, quiet)
+    if not (win and win.sections and win.sections[key]) then return end
+    Saved().section = key
+    for k, f in pairs(win.sections) do f:SetShown(k == key) end
+    for k, f in pairs(win.createSections) do f:SetShown(k == key) end
+    if win.WireStart then win.WireStart() end
+    for k, b in pairs(win.sectionButtons) do b:SetVariant(k == key and "ghost" or "mark") end
+    win.subtitle:SetText(SECTION_NAME[key])
+    if not quiet then
+        UI.Welcome.Done()   -- a section picked in the header: the welcome screen has done its job
+        win.tabs:Select(1)
+        A.FadeIn(win.sections[key], 0.2)
+    end
 end
 
 -- Settings page "Reset": default size, centered, saved geometry forgotten.
@@ -310,42 +439,21 @@ function UI.SelectTab(i)
     if win and win.tabs then win.tabs:Select(i) end
 end
 
--- /gotta uidebug: how far the + Create preparation gets, printed to chat
--- (for bug reports).
-function UI.Debug()
-    local D = UI.Data
-    local cs = LFGListFrame and LFGListFrame.CategorySelection
-    local ec = LFGListFrame and LFGListFrame.EntryCreation
-    local key = D.OwnKey()
-    local b = D.DungeonCategoryButton()
-    local function S(v) return tostring(v) end
-    local ids = {}
-    for _, btn in ipairs(cs and cs.CategoryButtons or {}) do
-        ids[#ids + 1] = S(btn.categoryID) .. "/" .. S(btn.filters) .. (btn:IsEnabled() and "" or " off")
-    end
-    local lines = {
-        "time: " .. date("%H:%M:%S") .. ", window open: " .. S(win and win:IsShown()) .. ", tab: " .. S(win and win.tabs and win.tabs.active),
-        "Blizzard_GroupFinder loaded: " .. S(LFGListFrame ~= nil) .. ", PVEFrame shown: " .. S(PVEFrame and PVEFrame:IsShown()),
-        "category buttons (id/filters): " .. (#ids > 0 and table.concat(ids, ", ") or "none")
-            .. ", dungeons button: " .. S(b ~= nil) .. ", selected category: " .. S(cs and cs.selectedCategory),
-        "Start a Group button: " .. S(cs and cs.StartGroupButton ~= nil)
-            .. ", enabled: " .. S(cs and cs.StartGroupButton and cs.StartGroupButton:IsEnabled()),
-        "helpers: category -> " .. S(GQEACreateCategory and GQEACreateCategory:GetAttribute("clickbutton") ~= nil)
-            .. ", start -> " .. S(GQEACreateStart and GQEACreateStart:GetAttribute("clickbutton") ~= nil),
-        "active panel: " .. S(LFGListFrame and LFGListFrame.activePanel and LFGListFrame.activePanel:GetDebugName()),
-        "form shown: " .. S(ec and ec:IsShown()) .. ", activity: " .. S(ec and ec.selectedActivity)
-            .. ", playstyle: " .. S(ec and ec.generalPlaystyle)
-            .. ", List Group enabled: " .. S(ec and ec.ListGroupButton and ec.ListGroupButton:IsEnabled()),
-        "your key activity: " .. S(key and key.act) .. ", level: " .. S(key and key.level)
-            .. ", form ready: " .. S(key and D.FormReady(key.act)) .. ", can start: " .. S(D.CanStart())
-            .. ", listed: " .. S(C_LFGList.HasActiveEntryInfo()) .. ", leader/alone: " .. S(D.CanApply()),
-    }
-    ns.Print("+ Create check:")
-    for _, l in ipairs(lines) do print("  " .. l) end
+-- The tab showing (nil while the window is closed).
+function UI.ActiveTab()
+    return win and win:IsShown() and win.tabs and win.tabs.active or nil
 end
 
 function UI.Toggle()
     if InCombatLockdown() then ns.Print("the window opens after combat."); return end
     if not win then Build() end
     win:SetShown(not win:IsShown())
+end
+
+-- /gotta welcome: the window with its welcome screen.
+function UI.ShowWelcome()
+    if InCombatLockdown() then ns.Print("the window opens after combat."); return end
+    if not win then Build() end
+    win:Show()
+    UI.Welcome.Show()
 end

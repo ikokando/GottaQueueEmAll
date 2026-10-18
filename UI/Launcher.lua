@@ -142,19 +142,24 @@ end)
 local MODIFIERS = { LSHIFT = true, RSHIFT = true, LCTRL = true, RCTRL = true, LALT = true, RALT = true,
                     LMETA = true, RMETA = true, UNKNOWN = true }
 
+-- Every hotkey button (header, welcome screen): a change repaints them all.
+local hotkeyButtons = {}
+
 function L.HotkeyButton(parent)
     local b = W.Button(parent, "", "mark", 120, 26, "tiny")
+    hotkeyButtons[#hotkeyButtons + 1] = b
     local function Paint()
         local key = L.HotkeyText()
         b:SetLabel(b.listening and "Press a key…  (Esc cancels)" or (key and ("Hotkey: " .. key) or "Set hotkey"))
         b:SetWidth(b.label:GetStringWidth() + 20)
-        b:SetVariant(b.listening and "ghost" or "mark")
+        b:SetVariant((b.listening or not key) and "ghost" or "mark")   -- gold while there is none
     end
+    b.Paint = Paint
     local function Stop()
         b.listening = false
         b:EnableKeyboard(false)
         b:SetScript("OnKeyDown", nil)
-        Paint()
+        for _, other in ipairs(hotkeyButtons) do other.Paint() end
     end
     b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     b:SetScript("OnClick", function(_, mouse)
