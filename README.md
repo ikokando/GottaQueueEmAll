@@ -50,6 +50,15 @@ res and Raider.IO info at a glance. Blizzard's window stays closed.
   icon flashing while WoW is in the background. Each part can be switched off.
 - No applicant alerts in someone else's group; the message goes away once you join.
 
+**Invite card**
+- Invites are answered in a card of its own: the dungeon's art, the key, the leader with
+  rating and best run, the group with your spot in gold and the role you join as; Accept
+  and Decline right there.
+- Several invites at once stack below the card; a click brings one into it, so you pick
+  the group you want.
+- No second confirmation: Blizzard's "You have joined a group" is closed, a short message
+  at the top says it. Blizzard's window comes back if WoW ever blocks the card's buttons.
+
 **Your Group**
 - Your listing with its art, key and requirements; edit the requirements or delist.
 - Your party's slots and every applicant: rating, item level, best run in your dungeon,
@@ -81,8 +90,8 @@ res and Raider.IO info at a glance. Blizzard's window stays closed.
 - Your name, rating and item level, and a DESERTER tag when Blizzard has marked you.
 
 **Settings**
-- In the window (the gear): alerts with a preview (when, on screen, sound, taskbar),
-  the "listed a while" hint, the vault in the footer, minimap button, hotkey, size.
+- In the window (the gear): alerts with a preview (when, invite card, on screen, sound,
+  taskbar), the "listed a while" hint, the vault in the footer, minimap button, hotkey, size.
 
 **Everything else**
 - One switch (View: Role | Spec): members as role glyphs in class color, or with their

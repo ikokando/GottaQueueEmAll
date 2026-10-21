@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.3.0
+
+- **Invite card:** when a leader invites you, a card at the top of the screen shows the
+  dungeon's art, the key, the leader with rating and best run, the group with your spot in
+  gold and the role you join as. Accept or Decline right there, no Blizzard window.
+- **Several invites at once** stack below the card; a click brings one into it, so you pick
+  the group you want instead of the first one that came in.
+- **No second confirmation:** Blizzard's "You have joined a group" with its OK is closed; a
+  short message at the top says it and fades by itself.
+- Settings: "Answer invites in our card" (on). Off: Blizzard's invite window as before.
+  Preview shows the card.
+- Fix: the "You" mark under the minimum leader rating no longer runs into "0" or "3600".
+
 ## 1.2.1
 
 - Ready for patch 12.1.7: the addon is listed as up to date there too.
