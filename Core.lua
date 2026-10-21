@@ -48,6 +48,7 @@ local DEFAULTS = {
     showMinimap = true,
     -- Alerts (UI/Alert.lua): when you're invited, when someone applies.
     alertInvite = true, alertApply = true,
+    inviteCard = true,         -- invites answered in our card (UI/Invite.lua), not Blizzard's window
     alertScreen = "both",      -- "both" (edge + message), "glow", "toast", "off"
     alertSound = true, alertSoundKit = "chime",
     alertFlash = true,         -- the taskbar icon, while WoW is in the background

@@ -143,6 +143,7 @@ local function PlayToast(text)
     toast.big:SetTextColor(unpack(text.bigColor or C.textHi))
     toast.small:SetText(text.small or "")
     toast.onClick = text.onClick
+    toast.notice = nil
     toast:Show()
     A.Rise(toast, 0, -12, 0.35)
     C_Timer.After(0.35, function() if toast:IsShown() then toast.shine.Sweep() end end)
@@ -157,13 +158,15 @@ end
 --  One alert, by the settings
 -------------------------------------------------------------------------------
 -- invite: Blizzard's invite window plays the Ready Check sound and flashes
--- the taskbar icon itself (LFGListInviteDialog_Show): no second flash, and
--- no second Ready Check sound.
-local function Fire(text, invite)
+-- the taskbar icon itself (LFGListInviteDialog_Show, also while our card
+-- answers and its window stays unseen): no second flash, and no second
+-- Ready Check sound. card: the invite card (UI/Invite.lua) is up, so no
+-- message at the top.
+local function Fire(text, invite, card)
     local db = DB() or {}
     local screen = db.alertScreen or "both"
     if screen == "both" or screen == "glow" then PlayGlow() end
-    if screen == "both" or screen == "toast" then PlayToast(text) end
+    if (screen == "both" or screen == "toast") and not card then PlayToast(text) end
     if db.alertSound ~= false and not (invite and db.alertSoundKit == "ready") then AL.PlaySound(db.alertSoundKit) end
     if db.alertFlash ~= false and not invite and FlashClientIcon then FlashClientIcon() end
 end
@@ -271,7 +274,8 @@ events:SetScript("OnEvent", function(_, event, arg1, arg2)
             D.appliedAt[id] = nil
         end
         local db = DB()
-        if status == "invited" and db and db.alertInvite ~= false then Fire(InviteText(id), true)
+        if status == "invited" and db and db.alertInvite ~= false then
+            Fire(InviteText(id), true, UI.Invite and UI.Invite.Active())
         elseif status == "inviteaccepted" or status == "invitedeclined" then AL.Dismiss() end   -- answered
     elseif event == "LFG_LIST_APPLICANT_LIST_UPDATED" then
         NewApplicants()
@@ -287,19 +291,33 @@ events:SetScript("OnEvent", function(_, event, arg1, arg2)
     end
 end)
 
--- The edge and the message go away (an invite answered, a group joined).
+-- The edge and the message go away (an invite answered, a group joined);
+-- a notice (AL.Notice) runs its course.
 function AL.Dismiss()
     if glow and glow:IsShown() then glow.anim:Stop(); glow:Hide() end
-    if toast and toast:IsShown() then toast.out:Play() end
+    if toast and toast:IsShown() and not toast.notice then toast.out:Play() end
+end
+
+-- A message at the top and nothing else (no edge, no sound): "you joined
+-- a group" (UI/Invite.lua). Shown when the "On screen" setting has messages.
+function AL.Notice(text)
+    local db = DB() or {}
+    local screen = db.alertScreen or "both"
+    if screen ~= "both" and screen ~= "toast" then return end
+    PlayToast(text)
+    toast.notice = true
 end
 
 -- Settings' "Preview": the invite alert with your keystone's dungeon (or a
--- plain line), whatever the "when" switches say.
+-- plain line), whatever the "when" switches say; with the invite card on,
+-- the card instead of the message.
 function AL.Preview()
+    local card = UI.Invite and UI.Invite.Active()
+    if card then UI.Invite.Preview() end
     local key = D.OwnKey and D.OwnKey()
     Fire({
         eyebrow = "INVITED  ·  PREVIEW",
         big = key and (key.dungeon .. (key.level and (" +" .. key.level) or "")) or "Your next group",
         small = "Accept in Blizzard's invite window",
-    })
+    }, false, card)
 end

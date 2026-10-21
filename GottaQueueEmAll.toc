@@ -26,6 +26,7 @@ UI\Group.lua
 UI\Create.lua
 UI\Launcher.lua
 UI\Alert.lua
+UI\Invite.lua
 UI\Vault.lua
 UI\Settings.lua
 UI\Welcome.lua

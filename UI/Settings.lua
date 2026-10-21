@@ -115,7 +115,11 @@ function SE.Build(win)
     -- Alerts
     local alerts = Panel(f, "Alerts")
     alerts:SetPoint("TOPLEFT", left); alerts:SetPoint("TOPRIGHT", left)
-    SwitchRow(alerts, "alertInvite", "When you're invited", "You signed up and a leader invites you.")
+    SwitchRow(alerts, "alertInvite", "When you're invited", "You signed up and a leader invites you.", function()
+        if UI.Invite then UI.Invite.SettingChanged() end
+    end)
+    SwitchRow(alerts, "inviteCard", "Answer invites in our card", "Accept or decline right in it; off: Blizzard's invite window.",
+        function() if UI.Invite then UI.Invite.SettingChanged() end end)
     SwitchRow(alerts, "alertApply", "When someone applies", "You lead a listed group and a new player signs up.")
     local scr = alerts:Row("On screen", "A soft gold edge that fades out, a short message at the top, or both.", true)
     screen = W.Segmented(scr, { { "both", "Edge + message" }, { "glow", "Edge" }, { "toast", "Message" }, { "off", "Nothing" } }, 28)

@@ -92,6 +92,8 @@ read_globals = {
     "issecretvalue",
     "IsShiftKeyDown",
     "LFGListFrame",
+    "LFGListInviteDialog",
+    "LFGListInviteDialog_Show",
     "LoadAddOn",
     "LOCALIZED_CLASS_NAMES_MALE",
     "MAX_LFG_LIST_APPLICATIONS",
