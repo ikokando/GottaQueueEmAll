@@ -567,7 +567,7 @@ function W.Slider(parent, opts)
         end
         if self.marker then
             self.marker:ClearAllPoints()
-            self.marker:SetPoint("CENTER", self, "LEFT", Frac(self, self.markerValue) * w, 0)
+            self.marker:SetPoint("CENTER", self, "LEFT", min(1, Frac(self, self.markerValue)) * w, 0)
         end
     end
 

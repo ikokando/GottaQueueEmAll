@@ -261,10 +261,23 @@ local function BuildFilters(bar, row2)
         Render()
     end
     local a = W.Text(p1, "tiny"); a:SetPoint("TOPLEFT", s1, "BOTTOMLEFT", 0, -1); a:SetText("0")
-    if s1.marker then   -- under your own rating's mark
-        local m = W.Text(p1, "tiny"); m:SetPoint("TOP", s1.marker, "BOTTOM", 0, -4); m:SetText(("You %d"):format(floor(mine)))
-    end
     local z = W.Text(p1, "tiny"); z:SetPoint("TOPRIGHT", s1, "BOTTOMRIGHT", 0, -1); z:SetText("3600")
+    if s1.marker then
+        -- Under your own rating's mark, kept inside the track; the "0" or "3600"
+        -- it would run into steps aside.
+        local m = W.Text(p1, "tiny"); m:SetText(("You %d"):format(floor(mine)))
+        local function PlaceMine()
+            local w = s1:GetWidth()
+            if w <= 0 then return end
+            local half = m:GetStringWidth() / 2
+            local x = min(max(mine / 3600 * w, half), w - half)
+            m:ClearAllPoints(); m:SetPoint("TOP", s1, "BOTTOMLEFT", x, -1)
+            a:SetShown(x - half > a:GetStringWidth() + 6)
+            z:SetShown(x + half < w - z:GetStringWidth() - 6)
+        end
+        s1:HookScript("OnSizeChanged", PlaceMine)
+        PlaceMine()
+    end
     RatingText(st.minRating)
 
     -- Leader's best in that dungeon.
