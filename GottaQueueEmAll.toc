@@ -6,6 +6,7 @@
 ## OptionalDeps: RaiderIO
 ## SavedVariables: GottaQueueEmAllDB
 ## X-Curse-Project-ID: 1714876
+## X-Wago-ID: bGoYRk60
 ## IconTexture: Interface\AddOns\GottaQueueEmAll\media\logo-qlens-mark
 ## AddonCompartmentFunc: GottaQueueEmAll_OnAddonCompartmentClick
 

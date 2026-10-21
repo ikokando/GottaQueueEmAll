@@ -6,13 +6,20 @@ applied to and get a heads-up when you're invited. Sign up, list your group and 
 your applicants, with ratings, best runs, roles and specs, lockouts, Bloodlust / battle
 res and Raider.IO info at a glance. Blizzard's window stays closed.
 
-![Mythic+ Browse: dungeons, key level, leader rating and best run, Role or Spec view](media/screenshots/1-mythic-plus-browse.png)
+<!-- Absolute image URLs: Wago Addons shows this README and can't resolve relative paths. -->
+![Filter Mythic+ groups by key level, instantly](https://raw.githubusercontent.com/ikokando/GottaQueueEmAll/main/media/screenshots/gqea-1-key-filter.gif)
 
-![Mythic+ + Create: your keystone, playstyle, requirements and your own title](media/screenshots/2-mythic-plus-create.png)
+![Sign up on the card, track every application, invites in gold](https://raw.githubusercontent.com/ikokando/GottaQueueEmAll/main/media/screenshots/gqea-2-applications.gif)
 
-![Your Group: your listing, party slots and applicants](media/screenshots/3-your-group.png)
+![List your keystone and see every applicant at a glance](https://raw.githubusercontent.com/ikokando/GottaQueueEmAll/main/media/screenshots/gqea-3-your-group.gif)
 
-![Raid Browse: lockouts, killed bosses, group size and every member at a glance](media/screenshots/4-raid-browse.png)
+![Mythic+ Browse: dungeons, key level, leader rating and best run, Role or Spec view](https://raw.githubusercontent.com/ikokando/GottaQueueEmAll/main/media/screenshots/1-mythic-plus-browse.png)
+
+![Mythic+ + Create: your keystone, playstyle, requirements and your own title](https://raw.githubusercontent.com/ikokando/GottaQueueEmAll/main/media/screenshots/2-mythic-plus-create.png)
+
+![Your Group: your listing, party slots and applicants](https://raw.githubusercontent.com/ikokando/GottaQueueEmAll/main/media/screenshots/3-your-group.png)
+
+![Raid Browse: lockouts, killed bosses, group size and every member at a glance](https://raw.githubusercontent.com/ikokando/GottaQueueEmAll/main/media/screenshots/4-raid-browse.png)
 
 ## Features
 
