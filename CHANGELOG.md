@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.1
+
+- Ready for patch 12.1.7: the addon is listed as up to date there too.
+- Also on Wago Addons from now on.
+
 ## 1.2.0
 
 - **Keystone Deserter:** Blizzard's mark for leaving Mythic+ runs early, shown as a rose
