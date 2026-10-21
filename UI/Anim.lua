@@ -112,8 +112,12 @@ function A.Grow(region, dur)
 end
 
 -- Shine: a soft light band that sweeps across a frame every few seconds
--- (gold buttons). The frame clips it.
-function A.Shine(frame, period)
+-- (gold buttons). The frame clips it. strength: the band's peak alpha.
+-- onDemand: no loop of its own; holder:Sweep() runs one pass at a steady
+-- speed, so narrow and wide frames shine alike (the deserter tags).
+local SWEEP_SPEED = 170   -- px per second
+function A.Shine(frame, period, strength, onDemand)
+    strength = strength or 0.42
     frame:SetClipsChildren(true)
     local holder = CreateFrame("Frame", nil, frame)
     holder:SetAllPoints()
@@ -128,30 +132,40 @@ function A.Shine(frame, period)
     left:SetTexture(UI.Theme.WHITE)
     left:SetSize(w / 2, 400)
     left:SetPoint("RIGHT", right, "LEFT", 0, 0)
-    left:SetGradient("HORIZONTAL", CreateColor(1, 1, 1, 0), CreateColor(1, 1, 1, 0.42))
-    right:SetGradient("HORIZONTAL", CreateColor(1, 1, 1, 0.42), CreateColor(1, 1, 1, 0))
+    left:SetGradient("HORIZONTAL", CreateColor(1, 1, 1, 0), CreateColor(1, 1, 1, strength))
+    right:SetGradient("HORIZONTAL", CreateColor(1, 1, 1, strength), CreateColor(1, 1, 1, 0))
     left:SetRotation(math.rad(-18)); right:SetRotation(math.rad(-18))
 
     local groups = {}
     for i, tex in ipairs({ left, right }) do
         local g = tex:CreateAnimationGroup()
-        g:SetLooping("REPEAT")
         local t = g:CreateAnimation("Translation")
         t:SetDuration(0.9)
-        t:SetStartDelay((period or 3.4) - 0.9)
         t:SetSmoothing("IN_OUT")
+        if not onDemand then
+            g:SetLooping("REPEAT")
+            t:SetStartDelay((period or 3.4) - 0.9)
+        end
         g.t = t
         groups[i] = g
     end
     -- The sweep distance follows the frame's width.
     local function Build()
+        local dist = frame:GetWidth() + w + 16
         for _, g in ipairs(groups) do
-            g:Stop()
-            g.t:SetOffset(frame:GetWidth() + w + 16, 0)
-            g:Play()
+            g.t:SetOffset(dist, 0)
+            if onDemand then
+                g.t:SetDuration(math.max(0.6, dist / SWEEP_SPEED))
+            else
+                g:Stop()
+                g:Play()
+            end
         end
     end
     holder:SetScript("OnSizeChanged", Build)
     Build()
+    function holder.Sweep()
+        for _, g in ipairs(groups) do g:Stop(); g:Play() end
+    end
     return holder
 end

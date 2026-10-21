@@ -7,6 +7,7 @@
 --  /gotta help            these commands
 --  /gotta welcome         the welcome screen again
 --  /gotta keyprobe        whether key levels can be read from titles (for bug reports)
+--  /gotta deserter        preview of the Keystone Deserter marks (on / off)
 -------------------------------------------------------------------------------
 local _, ns = ...
 
@@ -23,7 +24,8 @@ function ns.DB() return db end
 
 -- Events the window only needs while it is open: listed here, registered
 -- when it opens (ns.SetLive(true)) and dropped when it closes. Closed, the
--- addon does no work.
+-- addon does no work, apart from the alerts' two Group Finder events
+-- (UI/Alert.lua: invites and new applicants come while it is closed).
 local live = {}
 function ns.Live(frame, events) live[#live + 1] = { frame, events } end
 function ns.SetLive(on)
@@ -42,7 +44,16 @@ ns.BREZ_CLASS = { DRUID = true, DEATHKNIGHT = true, WARLOCK = true, PALADIN = tr
 -------------------------------------------------------------------------------
 --  Saved settings
 -------------------------------------------------------------------------------
-local DEFAULTS = { showMinimap = true }
+local DEFAULTS = {
+    showMinimap = true,
+    -- Alerts (UI/Alert.lua): when you're invited, when someone applies.
+    alertInvite = true, alertApply = true,
+    alertScreen = "both",      -- "both" (edge + message), "glow", "toast", "off"
+    alertSound = true, alertSoundKit = "chime",
+    alertFlash = true,         -- the taskbar icon, while WoW is in the background
+    markStale = true,          -- "Listed a while" on old, nearly empty groups
+    footerVault = true,        -- Great Vault and affixes in the footer
+}
 
 -- Settings of the 0.x sidebar addon, and logs of pre-release test builds;
 -- nothing uses them any more.
@@ -120,7 +131,15 @@ end
 -------------------------------------------------------------------------------
 local category
 
+-- The settings page in the window (UI/Settings.lua): the gear, the minimap
+-- button's right-click, /gotta settings.
 function ns.OpenSettings()
+    if InCombatLockdown() then ns.Print("settings open after combat."); return end
+    if ns.UI and ns.UI.ShowSettings then ns.UI.ShowSettings() else ns.OpenBlizzardSettings() end
+end
+
+-- Blizzard's Options > AddOns page.
+function ns.OpenBlizzardSettings()
     if InCombatLockdown() then ns.Print("settings open after combat."); return end
     if category and Settings and Settings.OpenToCategory then Settings.OpenToCategory(category:GetID()) end
 end
@@ -147,6 +166,10 @@ local function RegisterSettings()
     Button("Size and position", "Reset", function()
         if ns.UI and ns.UI.ResetGeometry then ns.UI.ResetGeometry() end
     end, "Puts the window back to its default size in the middle of the screen.")
+    Button("All settings", "Open in the window", function()
+        if SettingsPanel and SettingsPanel:IsShown() then HideUIPanel(SettingsPanel) end
+        ns.OpenSettings()
+    end, "Alerts, the group list, the footer and the window: all settings are on the window's own settings page (the gear).")
 
     Header("Opening the window")
     local var = "GottaQueueEmAll_showMinimap"
@@ -191,6 +214,7 @@ local function Help()
     print("  /gotta settings  -  the settings page")
     print("  /gotta welcome  -  the welcome screen again")
     print("  /gotta keyprobe  -  check whether key levels can be read (for bug reports)")
+    print("  /gotta deserter  -  preview how Keystone Deserters are shown (on / off)")
 end
 
 SlashCmdList.GOTTAQUEUEEMALL = function(msg)
@@ -204,6 +228,13 @@ SlashCmdList.GOTTAQUEUEEMALL = function(msg)
         ns.UI.ShowWelcome()
     elseif msg == "keyprobe" and ns.UI and ns.UI.KeyProbe then
         ns.UI.KeyProbe.Run()
+    elseif msg == "deserter" then
+        -- Made-up Keystone Deserters (you, some groups, some applicants) to
+        -- see how they look. Until switched off or the next /reload.
+        ns.deserterPreview = not ns.deserterPreview
+        ns.Print("deserter preview " .. (ns.deserterPreview and "|cffff7a9eon|r: you, every third group leader, a member of the next group and every other applicant are marked."
+            or "off."))
+        if ns.UI and ns.UI.RefreshDeserter then ns.UI.RefreshDeserter() end
     else
         Help()
     end

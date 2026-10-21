@@ -9,7 +9,7 @@
 --  round-border, radius 6), stretched as 9-slice and tinted.
 --
 --  Panel, Text, Label, Button (gold / ghost / quiet / mark / done), Chip,
---  Toggle, Tabs, Slider, RangeSlider, Histogram, Meter, Pill, Glyph,
+--  Toggle, Switch, Segmented, Tabs, Slider, RangeSlider, Histogram, Meter, Pill, DeserterTag, Glyph,
 --  RoleBadge, Banner, Card.
 -------------------------------------------------------------------------------
 local _, ns = ...
@@ -314,6 +314,66 @@ function W.Toggle(parent, text, glyph, glyphColor, height)
     function t:SetChecked(v) self.checked = v and true or false; PaintToggle(self) end
     t:SetChecked(false)
     return t
+end
+
+-------------------------------------------------------------------------------
+--  Switch (settings): a small track with a knob, gold when on
+-------------------------------------------------------------------------------
+local function PaintSwitch(s)
+    local on = s.checked
+    s.bg:SetVertexColor(unpack(on and { 0.82, 0.64, 0.30, 0.25 } or C.track))
+    W.SetBorder(s, on and { 0.82, 0.64, 0.30, 0.6 } or (s.hot and { 0.63, 0.71, 0.84, 0.3 } or C.lineStrong))
+    s.knob:SetVertexColor(unpack(on and C.goldLight or C.muted))
+    s.knob:ClearAllPoints()
+    s.knob:SetPoint("CENTER", s, on and "RIGHT" or "LEFT", on and -11 or 11, 0)
+end
+
+function W.Switch(parent)
+    local s = CreateFrame("Button", nil, parent)
+    s:SetSize(38, 22)
+    s.bg = W.Round(s, "BACKGROUND")
+    s.bg:SetAllPoints()
+    W.Border(s)
+    s.knob = W.Circle(s, "ARTWORK", nil, 14)
+    s:SetScript("OnEnter", function(self) self.hot = true; PaintSwitch(self) end)
+    s:SetScript("OnLeave", function(self) self.hot = false; PaintSwitch(self) end)
+    s:SetScript("OnClick", function(self)
+        self:SetChecked(not self.checked)
+        PlaySound(self.checked and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON or SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF)
+        if self.onChange then self.onChange(self.checked) end
+    end)
+    function s:SetChecked(v) self.checked = v and true or false; PaintSwitch(self) end
+    s:SetChecked(false)
+    return s
+end
+
+-------------------------------------------------------------------------------
+--  Segmented: one choice out of a few ({ { key, label }, ... }), anchored
+--  by its LEFT edge. onChange(key) after a click.
+-------------------------------------------------------------------------------
+function W.Segmented(parent, items, height)
+    local f = CreateFrame("Frame", nil, parent)
+    f:SetHeight(height or 28)
+    f.buttons = {}
+    local x = 0
+    for _, it in ipairs(items) do
+        local b = W.Button(f, it[2], "mark", nil, height or 28, "tiny")
+        b:SetWidth(math.ceil(b.label:GetStringWidth() + 20))
+        b:SetPoint("LEFT", x, 0)
+        x = x + b:GetWidth() + 4
+        b:SetScript("OnClick", function()
+            PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
+            f:SetValue(it[1])
+            if f.onChange then f.onChange(it[1]) end
+        end)
+        f.buttons[it[1]] = b
+    end
+    f:SetWidth(math.max(1, x - 4))
+    function f:SetValue(key)
+        self.value = key
+        for k, b in pairs(self.buttons) do b:SetVariant(k == key and "ghost" or "mark") end
+    end
+    return f
 end
 
 -------------------------------------------------------------------------------
@@ -654,6 +714,34 @@ function W.Pill(parent, text, border, bg)
     end
     p:SetScript("OnShow", Fit)
     p:SetText(text or "")
+    return p
+end
+
+-- Deserter tag: a rose pill with a slow, soft shine (Keystone Deserters).
+-- Noticeable without shouting: the band passes every few seconds, on all
+-- tags at once and at the same speed (one clock, running only while a tag
+-- is visible).
+local deserterTags, deserterClock = {}, nil
+local function SweepDeserters()
+    local any = false
+    for _, p in ipairs(deserterTags) do
+        if p:IsVisible() then any = true; p.shine.Sweep() end
+    end
+    if not any then deserterClock:Cancel(); deserterClock = nil end
+end
+
+function W.DeserterTag(parent, text)
+    local c = C.deserter
+    local p = W.Pill(parent, nil, { c[1], c[2], c[3], 0.6 }, { c[1], c[2], c[3], 0.14 })
+    p:SetHeight(18)
+    p.text:SetFontObject(T.Font.tiny)
+    p.text:SetTextColor(unpack(c))
+    p:SetText(text or "DESERTER")
+    p.shine = A.Shine(p, nil, 0.3, true)
+    p:HookScript("OnShow", function()
+        if not deserterClock then deserterClock = C_Timer.NewTicker(4.5, SweepDeserters) end
+    end)
+    deserterTags[#deserterTags + 1] = p
     return p
 end
 

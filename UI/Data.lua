@@ -22,7 +22,9 @@ local canaccess = canaccesstable or function() return true end
 local function Num(v) return type(v) == "number" and not issecret(v) and v or nil end
 local function Str(v) return type(v) == "string" and not issecret(v) and v or nil end
 local function Tab(v) return type(v) == "table" and not issecret(v) and canaccess(v) and v or nil end
-D.Num, D.Str, D.Tab = Num, Str, Tab
+-- A flag that is true: comparing a secret value errors, so a secret one is not.
+local function True(v) return not issecret(v) and v == true end
+D.Num, D.Str, D.Tab, D.True = Num, Str, Tab, True
 
 D.CATEGORY = GROUP_FINDER_CATEGORY_ID_DUNGEONS or 2
 D.RAID_CATEGORY = GROUP_FINDER_CATEGORY_ID_RAIDS or 3
@@ -119,6 +121,16 @@ function D.Party()
     return p
 end
 
+-- Are you a Keystone Deserter (Blizzard's mark for repeatedly leaving
+-- Mythic+ runs; it shows on your applications and listings)?
+function D.PlayerLeaver()
+    if ns.deserterPreview then return true end
+    local api = C_InstanceLeaver and C_InstanceLeaver.IsPlayerLeaver
+    if not api then return false end
+    local ok, leaver = pcall(api)
+    return ok and True(leaver)
+end
+
 -- Only the leader (or someone alone) may sign up.
 function D.CanApply()
     return not IsInGroup() or UnitIsGroupLeader("player")
@@ -139,11 +151,11 @@ end
 function D.Read(id)
     if not Num(id) then return end
     local info = Tab(C_LFGList.GetSearchResultInfo(id))
-    if not info or info.isDelisted == true then return end
+    if not info or True(info.isDelisted) then return end
     local ids = Tab(info.activityIDs)
     local act = ids and Num(ids[1])
     local ai = act and Tab(C_LFGList.GetActivityInfoTable(act))
-    if not (ai and ai.isMythicPlusActivity == true) then return end
+    if not (ai and True(ai.isMythicPlusActivity)) then return end
 
     local cid = ChallengeFor(Num(ai.mapID))
     local r = {
@@ -168,23 +180,48 @@ function D.Read(id)
     if best then
         r.best = Num(best.bestRunLevel)
         if r.best == 0 then r.best = nil end
-        r.timed = best.finishedSuccess == true
+        r.timed = True(best.finishedSuccess)
     end
 
     local li = Tab(C_LFGList.GetSearchResultLeaderInfo and C_LFGList.GetSearchResultLeaderInfo(id))
-    if li then r.leaderClass, r.leaderSpec = Str(li.classFilename), Str(li.specName) end
+    if li then
+        r.leaderClass, r.leaderSpec = Str(li.classFilename), Str(li.specName)
+        r.leaderLeaver = True(li.isLeaver)
+    end
 
+    -- Keystone Deserters in the group (Blizzard's isLeaver, patch 11.2).
+    r.leavers = 0
     for i = 1, Num(info.numMembers) or 0 do
         local pi = Tab(C_LFGList.GetSearchResultPlayerInfo(id, i))
         if pi then
             local m = { role = Str(pi.assignedRole) or "DAMAGER", class = Str(pi.classFilename),
-                        spec = Str(pi.specName), leader = pi.isLeader == true }
+                        spec = Str(pi.specName), leader = True(pi.isLeader), leaver = True(pi.isLeaver) }
             if m.role ~= "TANK" and m.role ~= "HEALER" then m.role = "DAMAGER" end
+            if m.leaver then
+                r.leavers = r.leavers + 1
+                if m.leader then r.leaderLeaver = true end
+            end
             r.members[#r.members + 1] = m
             if m.class and LUST[m.class] then r.lust = true end
             if m.class and BREZ[m.class] then r.brez = true end
         end
     end
+
+    -- /gotta deserter: made-up deserters to see how they look (every third
+    -- leader, a member of the next group).
+    if ns.deserterPreview then
+        local wantLeader = id % 3 == 0
+        if wantLeader or id % 3 == 1 then
+            for _, m in ipairs(r.members) do
+                if m.leader == wantLeader then
+                    if not m.leaver then m.leaver = true; r.leavers = r.leavers + 1 end
+                    if wantLeader then r.leaderLeaver = true end
+                    break
+                end
+            end
+        end
+    end
+    if r.leaderLeaver and r.leavers == 0 then r.leavers = 1 end
 
     local mc = Tab(C_LFGList.GetSearchResultMemberCounts(id))
     if mc then
@@ -303,6 +340,44 @@ function D.Cancel(id)
     C_LFGList.CancelApplication(id)
 end
 
+-- How many groups you may wait on at once (Blizzard's limit).
+D.MAX_APPLICATIONS = MAX_LFG_LIST_APPLICATIONS or 5
+
+-- Your sign-ups that are still open (any section: the limit is shared):
+-- { id, status = "applied" | "invited", dungeon, cid, key, leader,
+-- leaderClass, since = GetTime() of the sign-up or nil }; invites first.
+D.appliedAt = D.appliedAt or {}   -- filled by UI/Alert.lua's status event
+function D.Applications()
+    local out = {}
+    local ok, ids = pcall(C_LFGList.GetApplications)
+    for _, id in ipairs(ok and Tab(ids) or {}) do
+        local _, status, pending = C_LFGList.GetApplicationInfo(id)
+        status = Str(pending) or Str(status)
+        if status == "applied" or status == "invited" then
+            local a = { id = id, status = status, since = D.appliedAt[id] }
+            local r = D.Read(id)   -- Mythic+
+            if r then
+                a.dungeon, a.cid, a.key, a.leader, a.leaderClass = r.dungeon, r.cid, r.key, r.leader, r.leaderClass
+            else                   -- Raid, Mythic 0, ...: the activity's name
+                local info = Tab(C_LFGList.GetSearchResultInfo(id))
+                local acts = info and Tab(info.activityIDs)
+                local ai = acts and Num(acts[1]) and Tab(C_LFGList.GetActivityInfoTable(acts[1]))
+                a.dungeon = ai and Str(ai.fullName) or "?"
+                a.leader = info and Str(info.leaderName) and Ambiguate(info.leaderName, "short")
+                local li = Tab(C_LFGList.GetSearchResultLeaderInfo and C_LFGList.GetSearchResultLeaderInfo(id))
+                a.leaderClass = li and Str(li.classFilename)
+            end
+            out[#out + 1] = a
+        end
+    end
+    table.sort(out, function(a, b)
+        if (a.status == "invited") ~= (b.status == "invited") then return a.status == "invited" end
+        if (a.since or 0) ~= (b.since or 0) then return (a.since or 0) < (b.since or 0) end
+        return a.id < b.id
+    end)
+    return out
+end
+
 -------------------------------------------------------------------------------
 --  Your listing
 -------------------------------------------------------------------------------
@@ -324,12 +399,12 @@ function D.Entry()
     local act = ids and Num(ids[1])
     local cid, dungeon, ai = D.ActivityDungeon(act)
     local r = {
-        act = act, cid = cid, dungeon = dungeon or "?", mplus = ai and ai.isMythicPlusActivity == true,
+        act = act, cid = cid, dungeon = dungeon or "?", mplus = ai and True(ai.isMythicPlusActivity),
         title = e.name,
         rating = Num(e.requiredDungeonScore) or 0, ilvl = Num(e.requiredItemLevel) or 0,
-        playstyle = Num(e.generalPlaystyle), private = e.privateGroup == true,
-        autoAccept = e.autoAccept == true, crossFaction = e.isCrossFactionListing == true,
-        newPlayerFriendly = e.newPlayerFriendly == true, questID = Num(e.questID),
+        playstyle = Num(e.generalPlaystyle), private = True(e.privateGroup),
+        autoAccept = True(e.autoAccept), crossFaction = True(e.isCrossFactionListing),
+        newPlayerFriendly = True(e.newPlayerFriendly), questID = Num(e.questID),
     }
     -- A raid, or a dungeon without a keystone: its activity group (the
     -- instance), difficulty and size.
@@ -468,14 +543,16 @@ function D.Applicants(act)
         local info = Num(id) and Tab(C_LFGList.GetApplicantInfo(id))
         local status = info and (Str(info.pendingApplicationStatus) or Str(info.applicationStatus))
         if info and status and not GONE[status] then
-            local a = { id = id, status = status, isNew = info.isNew == true, comment = info.comment, members = {} }
+            local a = { id = id, status = status, isNew = True(info.isNew), comment = info.comment, members = {} }
             for i = 1, Num(info.numMembers) or 1 do
-                local name, class, _, _, ilvl, _, tank, healer, _, role, _, score, _, _, _, specID =
+                local name, class, _, _, ilvl, _, tank, healer, _, role, _, score, _, _, _, specID, leaver =
                     C_LFGList.GetApplicantMemberInfo(id, i)
                 local m = {
                     name = Str(name) and Ambiguate(name, "short") or "?", fullName = Str(name), class = Str(class),
                     ilvl = Num(ilvl) or 0, rating = Num(score) or 0,
-                    role = Str(role) or (tank == true and "TANK") or (healer == true and "HEALER") or "DAMAGER",
+                    -- Keystone Deserter (patch 11.2); /gotta deserter marks every other applicant.
+                    leaver = True(leaver) or (ns.deserterPreview and id % 2 == 0 and i == 1) or false,
+                    role = Str(role) or (True(tank) and "TANK") or (True(healer) and "HEALER") or "DAMAGER",
                 }
                 if m.role ~= "TANK" and m.role ~= "HEALER" then m.role = "DAMAGER" end
                 local sid = Num(specID)
@@ -483,7 +560,7 @@ function D.Applicants(act)
                 if act and C_LFGList.GetApplicantDungeonScoreForListing then
                     local best = Tab(C_LFGList.GetApplicantDungeonScoreForListing(id, i, act))
                     if best and Num(best.bestRunLevel) and best.bestRunLevel > 0 then
-                        m.best, m.timed = best.bestRunLevel, best.finishedSuccess == true
+                        m.best, m.timed = best.bestRunLevel, True(best.finishedSuccess)
                     end
                 end
                 m.lust = m.class and LUST[m.class] and true or false

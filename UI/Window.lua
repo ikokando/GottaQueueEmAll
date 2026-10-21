@@ -45,10 +45,13 @@ local function IconButton(parent, kind)
         self.bg:SetVertexColor(0.63, 0.71, 0.84, 0.07)
         for _, t in ipairs(parts) do t:SetVertexColor(unpack(C.textHi)) end
     end)
-    b:SetScript("OnLeave", function(self)
-        self.bg:SetVertexColor(0.63, 0.71, 0.84, 0)
-        for _, t in ipairs(parts) do t:SetVertexColor(unpack(C.muted)) end
-    end)
+    local function Rest(self)
+        self.bg:SetVertexColor(0.82, 0.64, 0.30, self.active and 0.14 or 0)
+        for _, t in ipairs(parts) do t:SetVertexColor(unpack(self.active and C.goldLight or C.muted)) end
+    end
+    b:SetScript("OnLeave", Rest)
+    -- Active (the gear while the settings page shows): gold.
+    function b:SetActive(on) self.active = on and true or false; Rest(self) end
     return b
 end
 
@@ -146,14 +149,14 @@ local function Build()
     -- Section switch: Mythic+ / Raid / Mythic 0, then PvP (announced).
     win.sectionButtons = {}
     local prev
-    for _, s in ipairs({ { "mplus", "Mythic+" }, { "raid", "Raid" }, { "dungeon", "Mythic 0" } }) do
-        local b = W.Button(head, s[2], "mark", nil, 30, "button")
+    for _, sec in ipairs({ { "mplus", "Mythic+" }, { "raid", "Raid" }, { "dungeon", "Mythic 0" } }) do
+        local b = W.Button(head, sec[2], "mark", nil, 30, "button")
         b:SetWidth(b.label:GetStringWidth() + 28)
         -- Follows the title's width (it grows once the font file is loaded).
         if prev then b:SetPoint("LEFT", prev, "RIGHT", 4, 0)
         else b:SetPoint("LEFT", title, "RIGHT", 28, -8) end
-        b:SetScript("OnClick", function() UI.SetSection(s[1]) end)
-        win.sectionButtons[s[1]] = b
+        b:SetScript("OnClick", function() UI.SetSection(sec[1]) end)
+        win.sectionButtons[sec[1]] = b
         prev = b
     end
     -- PvP: announced, not there yet.
@@ -176,7 +179,14 @@ local function Build()
     gear:SetPoint("RIGHT", close, "LEFT", -4, 0)
     local hotkey = UI.Launcher.HotkeyButton(head)
     hotkey:SetPoint("RIGHT", gear, "LEFT", -10, 0)
-    gear:SetScript("OnClick", function() if ns.OpenSettings then ns.OpenSettings() end end)
+    gear:SetScript("OnClick", function() UI.Settings.Toggle() end)
+    UI.Settings.onToggle = function(on) gear:SetActive(on) end
+    gear:HookScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:SetText("Settings", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    gear:HookScript("OnLeave", function() GameTooltip:Hide() end)
 
     -- Pages
     local content = CreateFrame("Frame", nil, win)
@@ -184,7 +194,7 @@ local function Build()
     content:SetPoint("BOTTOMRIGHT", 0, S.footer)
     win.pages = {}
     local names = { "Browse", "Your Group", "+ Create" }
-    for i, name in ipairs(names) do
+    for i in ipairs(names) do
         local p = CreateFrame("Frame", nil, content)
         p:SetAllPoints()
         p:Hide()
@@ -337,15 +347,45 @@ local function Build()
     win.status:SetPoint("LEFT", dot, "RIGHT", 8, 0)
     win.status:SetText("No search yet")
     local me = W.Text(foot, "small")
-    me:SetPoint("RIGHT", -S.pad - 18, 0)   -- room for the size grip
-    -- You: name, rating, item level (fresh each time the window opens).
+    -- You as a Keystone Deserter: a shining tag at the far right, with a
+    -- tooltip on what it means.
+    local tag = W.DeserterTag(foot)
+    tag:SetPoint("RIGHT", -S.pad - 18, 0)   -- room for the size grip
+    tag:Hide()
+    tag:EnableMouse(true)
+    tag:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:SetText("Keystone Deserter", unpack(C.deserter))
+        GameTooltip:AddLine("Blizzard marks you for leaving Mythic+ runs early. Group leaders see the mark on your applications, and players see it on your listing.", 0.85, 0.85, 0.85, true)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("Finish Mythic+ runs (timed or not) to lose it. A run ended by an abandon vote doesn't count against you.", 0.6, 0.65, 0.72, true)
+        GameTooltip:Show()
+    end)
+    tag:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    -- You: name, rating, item level, deserter mark (fresh each time the window opens).
     local function PaintMe()
         local _, class = UnitClass("player")
         local score = UI.Data.Num(C_ChallengeMode.GetOverallDungeonScore and C_ChallengeMode.GetOverallDungeonScore()) or 0
         local _, ilvl = GetAverageItemLevel()
         me:SetText(("%s%s|r  ·  %s%d|r  ·  ilvl %d"):format(T.ColorCode(T.ClassColor(class)), UnitName("player"),
             T.ColorCode(T.RatingColor(score)), score, math.floor(UI.Data.Num(ilvl) or 0)))
+        local leaver = UI.Data.PlayerLeaver()
+        tag:SetShown(leaver)
+        me:ClearAllPoints()
+        if leaver then
+            me:SetPoint("RIGHT", tag, "LEFT", -10, 0)
+        else
+            me:SetPoint("RIGHT", -S.pad - 18, 0)   -- room for the size grip
+            if GameTooltip:IsOwned(tag) then GameTooltip:Hide() end
+        end
     end
+    win.PaintMe = PaintMe
+    -- The mark can come or go while the window is open.
+    local meEvents = CreateFrame("Frame")
+    ns.Live(meEvents, { "INSTANCE_LEAVER_STATUS_CHANGED" })
+    meEvents:SetScript("OnEvent", PaintMe)
+    -- Great Vault and affixes, left of your line (UI/Vault.lua).
+    UI.Vault.Build(foot, me)
 
     -- First start: the welcome screen over the pages.
     UI.Welcome.Build(win, function(key)
@@ -353,11 +393,14 @@ local function Build()
         UI.SetSection(key)
     end)
 
+    UI.Settings.Build(win)
+
     SizeGrip()
     -- Events and the combat watch only while the window is open.
     win:SetScript("OnShow", function()
         ns.SetLive(true)
         PaintMe()
+        UI.Vault.Request()
         if win.PlaceFloats then win.PlaceFloats() end
         FitScale()
         A.FadeIn(win, 0.18)
@@ -365,6 +408,7 @@ local function Build()
     end)
     win:SetScript("OnHide", function()
         ns.SetLive(false)
+        UI.Settings.Hide()   -- next time the window opens on its pages
         -- No events while closed: each results page catches up on its next show.
         for _, p in ipairs({ UI.Browse, UI.RaidBrowse, UI.DungeonBrowse }) do p.stale = true end
     end)
@@ -400,6 +444,14 @@ function UI.ResetGeometry()
     win:ClearAllPoints()
     win:SetPoint("CENTER")
     win:SetSize(WIN_W, WIN_H)
+end
+
+-- /gotta deserter switched: footer, groups and applicants show it at once.
+function UI.RefreshDeserter()
+    if not (win and win:IsShown()) then return end   -- OnShow paints all of it
+    win.PaintMe()
+    if UI.Browse and UI.Browse.Reread then UI.Browse.Reread() end
+    if UI.Group and UI.Group.Refresh then UI.Group.Refresh() end
 end
 
 -- Footer text (left).
@@ -448,6 +500,25 @@ function UI.Toggle()
     if InCombatLockdown() then ns.Print("the window opens after combat."); return end
     if not win then Build() end
     win:SetShown(not win:IsShown())
+end
+
+-- The window with its settings page (the gear, the minimap button's
+-- right-click, /gotta settings).
+function UI.ShowSettings()
+    if InCombatLockdown() then ns.Print("the window opens after combat."); return end
+    if not win then Build() end
+    win:Show()
+    UI.Settings.Show()
+end
+
+-- The window on a tab (an alert's message: Your Group).
+function UI.OpenTab(i)
+    if InCombatLockdown() then ns.Print("the window opens after combat."); return end
+    if not win then Build() end
+    win:Show()
+    UI.Settings.Hide()
+    UI.Welcome.Done()
+    win.tabs:Select(i)
 end
 
 -- /gotta welcome: the window with its welcome screen.

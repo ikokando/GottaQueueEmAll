@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.2.0
+
+- **Keystone Deserter:** Blizzard's mark for leaving Mythic+ runs early, shown as a rose
+  DESERTER tag with a soft shine: on group cards (the leader, or "1 DESERTER IN GROUP"), on
+  applicants in Your Group, and next to your own name in the footer when it's you (with a
+  tooltip on how to lose it). Shown, never filtered.
+- **Your applications:** a bar above the list in Mythic+, Raid and Mythic 0 while you wait on
+  groups: dungeon art, key, leader, how long you've waited, an × to cancel, invites in gold.
+  It stays through new searches. At 5 / 5 the Sign up buttons say so.
+- **Alerts:** when you're invited or someone applies to the group you lead, a soft gold edge
+  on the screen, a short message at the top (click: Your Group), a sound and the taskbar
+  icon flashing while WoW is in the background. No applicant alerts in someone else's group;
+  the message goes away once you join.
+- **Settings in the window:** the gear (and the minimap button's right-click, `/gotta
+  settings`) opens a settings page in the window: alerts with a preview, the group list,
+  the footer, minimap button, hotkey, size.
+- **Great Vault in the footer:** this week's Mythic+ runs with the three vault slots, their
+  key and item level in the tooltip (a click opens the Great Vault), and this week's affixes
+  as icons.
+- **Listed a while:** Mythic+ groups listed for 20 minutes or more with 2 players or fewer get
+  a quiet hint; they stay in the list.
+- Fixes: opening the window while the Group Finder's data is restricted no longer errors;
+  the dungeon chips notice when a best key turns from over time to in time.
+
 ## 1.1.0
 
 Gotta Queue 'Em All is now a Group Finder suite: Mythic+, Raid and Mythic 0, in one window.

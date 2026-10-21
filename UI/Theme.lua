@@ -52,6 +52,8 @@ T.C = {
     badText    = Hex("FF9F96"),
     lust       = Hex("FF9A4D"),
     brez       = Hex("86E0A2"),
+    deserter   = Hex("FF7A9E"),   -- Keystone Deserter: rose, its own color
+    stale      = Hex("C9A46A"),   -- a group listed a while: muted amber
 }
 
 -- Spacing (UI units).

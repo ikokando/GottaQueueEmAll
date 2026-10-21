@@ -350,6 +350,8 @@ local function NewLine(row)
     l.best = W.Text(row, "bodySm")
     l.lust = W.Glyph(row, "lust", 24, C.lust)
     l.brez = W.Glyph(row, "brez", 24, C.brez)
+    l.deserter = W.DeserterTag(row)
+    l.deserter:SetPoint("LEFT", l.name, "RIGHT", 8, 0)
     return l
 end
 
@@ -370,6 +372,7 @@ local function ShowLine(l, shown)
     for _, k in ipairs({ "name", "sub", "badge", "rating", "rmeter", "ilvl", "imeter", "best", "lust", "brez" }) do
         l[k]:SetShown(shown)
     end
+    if not shown then l.deserter:Hide() end   -- shown: by FillRow, deserters only
 end
 
 local function RowTooltip(row)
@@ -381,6 +384,14 @@ local function RowTooltip(row)
     local empty = c == nil or (type(c) == "string" and not (issecretvalue and issecretvalue(c)) and c == "")
     if empty or not pcall(GameTooltip.AddLine, GameTooltip, c, 0.85, 0.85, 0.85, true) then
         GameTooltip:AddLine("No note", 0.55, 0.6, 0.68)
+    end
+    -- Keystone Deserters (Blizzard's mark for leaving Mythic+ runs early).
+    for _, m in ipairs(a.members) do
+        if m.leaver then
+            local col = C.deserter
+            GameTooltip:AddLine((#a.members > 1 and (m.name .. ": ") or "") .. "Keystone Deserter, has left Mythic+ runs early",
+                col[1], col[2], col[3], true)
+        end
     end
     -- Raider.IO profile of each member (if installed).
     for _, m in ipairs(a.members) do
@@ -426,6 +437,7 @@ local function FillRow(row, a)
         l.name:SetText(m.name)
         l.name:SetTextColor(unpack(T.ClassColor(m.class)))
         local sub = m.spec or (m.class and LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[m.class]) or ""
+        l.deserter:SetShown(m.leaver)   -- Keystone Deserter: the tag next to the name
         -- What Create's "Looking for" asks for (the raid page's for a raid).
         -- Not Mythic+ (a raid, a dungeon without a key): no rating, no best run.
         local raidListing = G.entry and not G.entry.mplus

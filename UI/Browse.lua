@@ -61,7 +61,8 @@ local function BuildChips()
     local ids, parts = {}, {}
     for _, g in ipairs(groups) do
         ids[#ids + 1] = g.id
-        local level, timed = ns.BestKey and ns.BestKey(g.cid)
+        local level, timed   -- ("a and f()" would keep only f's first value)
+        if ns.BestKey then level, timed = ns.BestKey(g.cid) end
         parts[#parts + 1] = g.id .. ":" .. tostring(level) .. tostring(timed)
     end
     local key = table.concat(parts, ",")
@@ -353,7 +354,7 @@ local function Tooltip(card)
         local col = T.ClassColor(m.class)
         GameTooltip:AddDoubleLine(
             (m.spec and (m.spec .. " ") or "") .. (m.class and (LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[m.class] or m.class) or "?")
-                .. (m.leader and "  |cffd2a24c(leader)|r" or ""),
+                .. (m.leader and "  |cffd2a24c(leader)|r" or "") .. (m.leaver and ("  " .. T.ColorCode(C.deserter) .. "DESERTER|r") or ""),
             ROLE_NAME[m.role], col[1], col[2], col[3], 0.6, 0.65, 0.72)
     end
     local open, spots = D.OpenSpots(r), {}
@@ -413,6 +414,9 @@ local function NewCard(parent)
     c.name = W.Text(c, "h2"); c.name:SetPoint("TOPLEFT", c.strip, "TOPRIGHT", 14, -10)
     c.title = W.Text(c, "body", C.text2); c.title:SetPoint("BOTTOMLEFT", c.name, "BOTTOMRIGHT", 10, 0)
     c.line2 = W.Text(c, "bodySm"); c.line2:SetPoint("TOPLEFT", c.name, "BOTTOMLEFT", 0, -6)
+    c.deserter = W.DeserterTag(c)
+    c.deserter:SetPoint("LEFT", c.line2, "RIGHT", 10, 0)
+    c.deserter:Hide()
     c.slots, c.specs = {}, {}
     for i = 1, 5 do
         local rb = W.RoleBadge(c, 24)
@@ -428,6 +432,10 @@ local function NewCard(parent)
     c.brez = W.Glyph(c, "brez", 24, C.brez)
     c.style = W.Pill(c, "")
     c.style:SetHeight(20)
+    c.stalePill = W.Pill(c, "Listed a while", { C.stale[1], C.stale[2], C.stale[3], 0.45 }, { 0, 0, 0, 0 })
+    c.stalePill:SetHeight(20)
+    c.stalePill.text:SetTextColor(unpack(C.stale))
+    c.stalePill:Hide()
 
     c.btn = W.Button(c, "Sign up", "ghost", 100)
     c.btn:SetPoint("RIGHT", -14, 0)
@@ -454,6 +462,24 @@ local STATUS_BUTTON = {
 }
 
 local function Clock(r) return T.Clock(r.age + (GetTime() - r.readAt)) end
+
+-- "Listed a while": up 20 minutes or more with 2 players or fewer (a hint,
+-- the group stays in the list). Setting "markStale".
+local STALE_AGE, STALE_MEMBERS = 20 * 60, 2
+local function IsStale(r)
+    local db = ns.DB and ns.DB()
+    if db and db.markStale == false then return false end
+    return r.age + (GetTime() - r.readAt) >= STALE_AGE and #r.members <= STALE_MEMBERS
+end
+
+-- The age clock, amber with its pill once the group counts as listed a while.
+local function PaintAge(c)
+    local r = c.r
+    c.age:SetText(Clock(r))
+    local stale = IsStale(r)
+    c.age:SetTextColor(unpack(stale and C.stale or C.muted))
+    c.stalePill:SetShown(stale)
+end
 
 local function FillCard(c, r)
     c.r = r
@@ -488,6 +514,16 @@ local function FillCard(c, r)
         line = line .. "  |cff8d98a8·  no run here this season|r"
     end
     c.line2:SetText(line)
+    -- Keystone Deserters: the leader ("DESERTER", "+N" for more), else how
+    -- many of the others. Who exactly: the card's tooltip.
+    local others = (r.leavers or 0) - (r.leaderLeaver and 1 or 0)
+    if r.leaderLeaver or others > 0 then
+        c.deserter:SetText(r.leaderLeaver and ("DESERTER" .. (others > 0 and ("  +" .. others) or ""))
+            or ("%d DESERTER%s IN GROUP"):format(others, others == 1 and "" or "S"))
+        c.deserter:Show()
+    else
+        c.deserter:Hide()
+    end
 
     -- Members by role, then open spots.
     local slots = {}
@@ -524,17 +560,21 @@ local function FillCard(c, r)
     if r.brez then c.brez:SetPoint("LEFT", x, "RIGHT", r.lust and 0 or 6, 0); x = c.brez end
     local ps = D.PlaystyleLabel(r.playstyle)
     c.style:SetShown(ps ~= nil)
-    if ps then c.style:SetText(ps); c.style:SetPoint("LEFT", x, "RIGHT", 8, 0) end
+    if ps then c.style:SetText(ps); c.style:SetPoint("LEFT", x, "RIGHT", 8, 0); x = c.style end
+    c.stalePill:ClearAllPoints()
+    c.stalePill:SetPoint("LEFT", x, "RIGHT", 8, 0)
 
     c.rating:SetText(floor(r.rating))
     c.rating:SetTextColor(unpack(T.RatingColor(r.rating)))
     c.meter:SetValue(r.rating / 3600, T.RatingColor(r.rating))
-    c.age:SetText(Clock(r))
+    PaintAge(c)
 
     local sb = STATUS_BUTTON[r.status]
-    c.btn:SetLabel(sb and sb[1] or "Sign up")
-    c.btn:SetVariant(sb and sb[2] or "ghost")
-    c.btn:SetEnabled(not (sb and sb[3]) and D.CanApply())
+    -- All sign-ups used: this one waits until you cancel one (the bar above).
+    local full = not sb and B.appsBar and B.appsBar:FullLabel()
+    c.btn:SetLabel(sb and sb[1] or full or "Sign up")
+    c.btn:SetVariant(sb and sb[2] or (full and "quiet") or "ghost")
+    c.btn:SetEnabled(not (sb and sb[3]) and not full and D.CanApply())
 
     c:SetAlpha(1)   -- a card reused halfway through its rise animation
 end
@@ -565,6 +605,7 @@ Render = function(animate)
     -- Hidden tab or closed window: nothing to draw; the page's OnShow renders.
     if not (B.child and B.page and B.page:IsVisible()) then return end
     local st = B.st
+    if B.appsBar then B.appsBar:Paint(true) end
     -- Groups that don't fit the client-side filters are left out entirely.
     local list, hidden = {}, 0
     for _, r in ipairs(B.results) do
@@ -650,6 +691,16 @@ local function Load()
     Render(true)
 end
 
+-- The groups read again in place (/gotta deserter switched).
+function B.Reread()
+    if not B.page then return end
+    for i = #B.results, 1, -1 do
+        local fresh = D.Read(B.results[i].id)
+        if fresh then B.results[i] = fresh else table.remove(B.results, i) end
+    end
+    Render()
+end
+
 local pendingUpdate = {}
 local function Flush()
     B.flushQueued = false
@@ -702,6 +753,8 @@ events:SetScript("OnEvent", function(_, event, arg1)
         PaintSearch()
     elseif event == "LFG_LIST_SEARCH_RESULT_UPDATED" or event == "LFG_LIST_APPLICATION_STATUS_UPDATED" then
         Queue(arg1)
+        -- Your sign-ups changed: the bar (also for groups not in the list), Sign up at 5 / 5.
+        if event == "LFG_LIST_APPLICATION_STATUS_UPDATED" and B.appsBar then B.appsBar.dirty = true; Render() end
     elseif event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_SPECIALIZATION_CHANGED" then
         if event == "PLAYER_SPECIALIZATION_CHANGED" and arg1 ~= "player" then return end
         D.ResetParty()
@@ -759,6 +812,8 @@ function UI.BuildBrowse(page)
     local scroll = CreateFrame("ScrollFrame", nil, page)
     scroll:SetPoint("TOPLEFT", row2, "BOTTOMLEFT", 0, -32)
     scroll:SetPoint("BOTTOMRIGHT", -S.pad, 10)
+    -- Your applications, between the filters and the list (UI/AppsBar.lua).
+    B.appsBar = UI.AppsBar.New(page, row2, B.count, scroll)
     scroll:SetClipsChildren(true)
     B.child = CreateFrame("Frame", nil, scroll)
     B.child:SetSize(944, 1)
@@ -804,7 +859,8 @@ function UI.BuildBrowse(page)
             Render()
         end
         B.ticker = C_Timer.NewTicker(1, function()
-            for _, c in ipairs(B.cards) do if c:IsShown() and c.r then c.age:SetText(Clock(c.r)) end end
+            for _, c in ipairs(B.cards) do if c:IsShown() and c.r then PaintAge(c) end end
+            B.appsBar:Paint()
             if B.lastSearch and UI.SetStatus then
                 UI.SetStatus("Last search " .. T.Clock(GetTime() - B.lastSearch) .. " ago")
             end

@@ -232,7 +232,7 @@ local function New(cfg)
     local function Read(id)
         if not D.Num(id) then return end
         local info = C_LFGList.GetSearchResultInfo(id)
-        if type(info) ~= "table" or issecretvalue and issecretvalue(info) or info.isDelisted == true then return end
+        if type(info) ~= "table" or issecretvalue and issecretvalue(info) or D.True(info.isDelisted) then return end
         local ids = type(info.activityIDs) == "table" and info.activityIDs
         local act = ids and D.Num(ids[1])
         local ai = act and C_LFGList.GetActivityInfoTable(act)
@@ -806,9 +806,11 @@ local function New(cfg)
         c.age:SetText(Clock(r))
 
         local sb = STATUS_BUTTON[r.status]
-        c.btn:SetLabel(sb and sb[1] or "Sign up")
-        c.btn:SetVariant(sb and sb[2] or "ghost")
-        c.btn:SetEnabled(not (sb and sb[3]) and D.CanApply())
+        -- All sign-ups used: this one waits until you cancel one (the bar above).
+        local full = not sb and RB.appsBar and RB.appsBar:FullLabel()
+        c.btn:SetLabel(sb and sb[1] or full or "Sign up")
+        c.btn:SetVariant(sb and sb[2] or (full and "quiet") or "ghost")
+        c.btn:SetEnabled(not (sb and sb[3]) and not full and D.CanApply())
         c:SetAlpha(1)
     end
 
@@ -861,6 +863,7 @@ local function New(cfg)
 
     Render = function(animate)
         if not (RB.child and RB.page and RB.page:IsVisible()) then return end
+        if RB.appsBar then RB.appsBar:Paint(true) end
         local st = RB.st
         local list, hidden = {}, 0
         for _, r in ipairs(RB.results) do
@@ -963,6 +966,8 @@ local function New(cfg)
                 pending[arg1] = true
                 if not RB.flushQueued then RB.flushQueued = true; C_Timer.After(0.15, Flush) end
             end
+            -- Your sign-ups changed: the bar, and Sign up at the limit.
+            if event == "LFG_LIST_APPLICATION_STATUS_UPDATED" and RB.appsBar then RB.appsBar.dirty = true; Render() end
         elseif event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_SPECIALIZATION_CHANGED" then
             if event == "PLAYER_SPECIALIZATION_CHANGED" and arg1 ~= "player" then return end
             D.ResetParty()
@@ -1029,6 +1034,8 @@ local function New(cfg)
             self:SetVerticalScroll(min(limit, max(0, self:GetVerticalScroll() - d * (CardH(cfg.isRaid) + CARD_GAP))))
         end)
         RB.scroll = scroll
+        -- Your applications, between the filters and the list (UI/AppsBar.lua).
+        RB.appsBar = UI.AppsBar.New(page, row2, RB.count, scroll)
 
         RB.empty = W.Text(page, "body", C.muted)
         RB.empty:SetPoint("TOP", scroll, "TOP", 0, -60)
@@ -1045,6 +1052,7 @@ local function New(cfg)
             if RB.ticker then RB.ticker:Cancel() end
             RB.ticker = C_Timer.NewTicker(1, function()
                 for _, c in ipairs(RB.cards) do if c:IsShown() and c.r then c.age:SetText(Clock(c.r)) end end
+                RB.appsBar:Paint()
                 if RB.lastSearch and UI.SetStatus then
                     UI.SetStatus("Last search " .. T.Clock(GetTime() - RB.lastSearch) .. " ago")
                 elseif UI.SetStatus then
