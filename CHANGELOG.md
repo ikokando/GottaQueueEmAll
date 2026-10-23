@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.4.0
 
 - **Filter presets:** "Presets" right of the group count saves all Mythic+ filters under a
   name ("Push 15+", "Weekly 10+") and brings them back in one click (and searches); delete them in
