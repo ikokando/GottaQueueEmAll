@@ -121,8 +121,8 @@ function SE.Build(win)
     SwitchRow(alerts, "inviteCard", "Answer invites in our card", "Accept or decline right in it; off: Blizzard's invite window.",
         function() if UI.Invite then UI.Invite.SettingChanged() end end)
     SwitchRow(alerts, "alertApply", "When someone applies", "You lead a listed group and a new player signs up.")
-    local scr = alerts:Row("On screen", "A soft gold edge that fades out, a short message at the top, or both.", true)
-    screen = W.Segmented(scr, { { "both", "Edge + message" }, { "glow", "Edge" }, { "toast", "Message" }, { "off", "Nothing" } }, 28)
+    local scr = alerts:Row("On screen", "A gold edge around the screen: it pulses until you answer an invite.", true)
+    screen = W.Segmented(scr, { { "glow", "Edge" }, { "off", "Nothing" } }, 28)
     screen:SetPoint("TOPLEFT", scr.desc, "BOTTOMLEFT", 0, -10)
     screen.onChange = function(v)
         local db = DB()
@@ -164,12 +164,21 @@ function SE.Build(win)
     SwitchRow(list, "markStale", "Mark groups listed a while", "From 20 minutes with 2 players or fewer.", function()
         if UI.Browse and UI.Browse.Reread then UI.Browse.Reread() end
     end)
+    SwitchRow(list, "leaderRegion", "Leader's region", "A flag before the leader: where their realm is.", function()
+        if UI.Browse and UI.Browse.Reread then UI.Browse.Reread() end
+        for _, rb in ipairs({ UI.RaidBrowse, UI.DungeonBrowse }) do
+            if rb and rb.page then rb.Render() end
+        end
+    end)
 
-    -- Footer
-    local foot = Panel(f, "Footer")
+    -- Mythic+: the footer's vault, the keystone window
+    local foot = Panel(f, "Mythic+")
     foot:SetPoint("TOPLEFT", list, "BOTTOMLEFT", 0, -14); foot:SetPoint("TOPRIGHT", list, "BOTTOMRIGHT", 0, -14)
-    SwitchRow(foot, "footerVault", "Great Vault and affixes", "Runs this week, vault slots, the affixes.", function()
+    SwitchRow(foot, "footerVault", "Great Vault in the footer", "Runs this week, vault slots, the affixes.", function()
         if UI.Vault then UI.Vault.Refresh() end
+    end)
+    SwitchRow(foot, "keystoneWindow", "Our keystone window", "Ready check, pull timer and start in one; off: Blizzard's.", function()
+        if UI.Keystone then UI.Keystone.SettingChanged() end
     end)
 
     -- Window
@@ -220,7 +229,8 @@ function SE.Paint()
     local db = DB()
     if not (db and frame) then return end
     for key, s in pairs(switches) do s:SetChecked(db[key] ~= false) end
-    screen:SetValue(db.alertScreen or "both")
+    local v = db.alertScreen or "glow"
+    screen:SetValue((v == "off" or v == "toast") and "off" or "glow")
     local name = "Sound"
     for _, s in ipairs(UI.Alert and UI.Alert.SOUNDS or {}) do if s.key == db.alertSoundKit then name = s.name end end
     soundBtn:SetLabel(name)

@@ -1,5 +1,38 @@
 # Changelog
 
+## Unreleased
+
+- **Filter presets:** "Presets" right of the group count saves all Mythic+ filters under a
+  name ("Push 15+", "Weekly 10+") and brings them back in one click (and searches); delete them in
+  the same panel. Up to 20, account-wide.
+- **Upgrades:** a green "Upgrade" tag on keys that, timed, beat your best run in that dungeon
+  (an estimate), and an "Upgrades only" filter next to Presets.
+- **Key level filter up to +30:** the slider's top end is now +30 (and up), so ranges like
+  +21 - +25 work. A saved "+20 and up" becomes "+30 and up".
+- **Leader's region:** a small flag before the leader's name on Mythic+, Raid and Mythic 0
+  cards shows where their realm is (Germany, France, Spain, Italy, Russia, Portugal,
+  Europe for English realms; US, Latin America, Brazil, Oceania), the tooltip names the
+  country and realm. Settings: "Leader's region" (on).
+- **Keystone window:** at the Font of Power our own window replaces Blizzard's: the key's
+  level in a ring whose five points light up gold as the group gets ready, the dungeon,
+  the timer with the +3 / +2 / +1 times, the affixes with their tooltips, the group with
+  ratings and ready state. Your keystone goes in by itself. A pull timer slider (3 - 30 s,
+  quick picks 5 / 10 / 15 / 20) keeps its last value. Activate runs it all in one go: a ready
+  check, the pull timer, and the key starts at 0; each step can be switched off. Settings:
+  "Our keystone window" (on); `/gotta keystone` shows a preview.
+- **Invite card:** the group as a lineup of spec portraits in class colors (the leader's ring
+  turns, your spot breathes in gold), the leader's flag with country and realm, chips for
+  Lust, B-Res, open spots, friends and guild mates in the group, playstyle and voice, and
+  the leader's and your own best run in the dungeon.
+- **Invite alert:** while an invite waits, the screen edges glow until you answer (or it
+  times out). Settings, "On screen": Edge glow or Nothing. Invites no longer show the
+  message at the top; new applicants and "You're in the group" still do.
+- **Search:** when the server doesn't answer (too many searches in a row), a hint says so
+  and the button counts down "Search again in 5 s"; a failed search says so too.
+- **Range sliders:** two thumbs that meet are drawn side by side, so each can be grabbed;
+  grabbed right between them, the first move decides which one follows.
+- Fix: the invite card no longer flickers or turns the screen gold.
+
 ## 1.3.0
 
 - **Invite card:** when a leader invites you, a card at the top of the screen shows the

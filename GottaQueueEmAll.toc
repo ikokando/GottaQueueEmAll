@@ -15,6 +15,8 @@ UI\Theme.lua
 UI\Anim.lua
 UI\Widgets.lua
 UI\Data.lua
+UI\Realms.lua
+UI\Region.lua
 UI\KeyRead.lua
 UI\TitleBox.lua
 UI\KeyProbe.lua
@@ -27,6 +29,7 @@ UI\Create.lua
 UI\Launcher.lua
 UI\Alert.lua
 UI\Invite.lua
+UI\Keystone.lua
 UI\Vault.lua
 UI\Settings.lua
 UI\Welcome.lua

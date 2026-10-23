@@ -265,17 +265,36 @@ local function SlotAfterJoin(r, role, p)
     return open - p.roles[role] > 0
 end
 
--- st: keyMin, keyMax, expMin, expMax, fitLust, fitBrez, notDeclined.
+-- The key slider's top (+30 = +30 and up); the leader's best stays at +20.
+D.KEY_TOP = 30
+
+-- Would this key raise your score in its dungeon, timed? Above your best
+-- in-time run there and not below your best over-time one (an estimate:
+-- the season's score formula isn't weighed). nil: the key or your runs
+-- can't be read.
+function D.Upgrade(r)
+    if not (r.key and r.cid and C_MythicPlus and C_MythicPlus.GetSeasonBestForMap) then return nil end
+    local ok, inTime, overTime = pcall(C_MythicPlus.GetSeasonBestForMap, r.cid)
+    if not ok then return nil end
+    local timed = type(inTime) == "table" and Num(inTime.level) or 0
+    local over = type(overTime) == "table" and Num(overTime.level) or 0
+    return r.key > timed and r.key >= over, timed
+end
+
+-- st: keyMin, keyMax, expMin, expMax, fitLust, fitBrez, notDeclined, upgrades.
 function D.Fits(r, st)
     local p = D.Party()
     -- Minimum leader rating: the server filters by it too, but only on the
     -- next search; here it applies to the groups already found at once.
     if (st.minRating or 0) > 0 and (r.rating or 0) < st.minRating then return false end
     -- Key level, when the title could be measured; the top end is open at
-    -- +20 too. Titles that couldn't be measured (custom text) stay.
-    if r.key and (st.keyMin > 2 or st.keyMax < 20) then
-        if r.key < st.keyMin or (st.keyMax < 20 and r.key > st.keyMax) then return false end
+    -- D.KEY_TOP. Titles that couldn't be measured (custom text) stay.
+    local top = D.KEY_TOP
+    if r.key and (st.keyMin > 2 or st.keyMax < top) then
+        if r.key < st.keyMin or (st.keyMax < top and r.key > st.keyMax) then return false end
     end
+    -- Upgrades only: keys that can't be read stay, like above.
+    if st.upgrades and D.Upgrade(r) == false then return false end
     -- The top end is open at +20: "+10 – +20" includes +21 and up. Leaders
     -- without a run in that dungeon stay: the card says "no run here".
     if r.best and (st.expMin > 2 or st.expMax < 20) then

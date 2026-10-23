@@ -6,7 +6,7 @@
 -- name here once it is confirmed to exist.
 std = "lua51"
 max_line_length = false
-exclude_files = { "tools/**", ".git/**" }
+exclude_files = { "tools/**", ".git/**", "_backup/**" }
 ignore = {
     "212/self",   -- unused self in methods and scripts
 }
@@ -28,22 +28,28 @@ read_globals = {
     "C_AddOns",
     "C_ChallengeMode",
     "C_ClassColor",
+    "C_Container",
+    "C_CreatureInfo",
     "C_EncounterJournal",
     "C_InstanceLeaver",
     "C_Item",
     "C_LFGList",
     "C_MythicPlus",
+    "C_PartyInfo",
     "C_PlayerInfo",
     "C_SpecializationInfo",
     "C_Texture",
     "C_Timer",
     "C_WeeklyRewards",
     "canaccesstable",
+    "ChallengesKeystoneFrame",
+    "ClearCursor",
     "CreateColor",
     "CreateFont",
     "CreateFrame",
     "CreateSettingsButtonInitializer",
     "CreateSettingsListSectionHeaderInitializer",
+    "CursorHasItem",
     "DAMAGER",
     "DifficultyUtil",
     "EJ_GetCurrentTier",
@@ -61,16 +67,20 @@ read_globals = {
     "GetBindingKey",
     "GetBindingText",
     "GetCurrentBindingSet",
+    "GetCurrentRegion",
     "GetCursorPosition",
     "GetCVarBool",
     "GetDetailedItemLevelInfo",
     "GetMinimapShape",
+    "GetNormalizedRealmName",
     "GetNumGroupMembers",
     "GetNumSavedInstances",
+    "GetReadyCheckStatus",
     "GetSavedInstanceInfo",
     "GetSpecialization",
     "GetSpecializationInfo",
     "GetSpecializationInfoByID",
+    "GetSpecializationInfoForClassID",
     "GetSpecializationRole",
     "GetTime",
     "GROUP_FINDER_CATEGORY_ID_CUSTOM",

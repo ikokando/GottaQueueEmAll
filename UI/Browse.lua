@@ -4,10 +4,12 @@
 --  Server-side filters (sent with the search): dungeons, minimum leader
 --  rating, a free spot for your role. Client-side (hide what doesn't fit):
 --  the key level (measured from the title, UI/KeyRead.lua), the leader's
---  best key in that dungeon, lust / battle res fit, declined.
+--  best key in that dungeon, lust / battle res fit, declined, upgrades for
+--  your score. Filter presets: saved sets of all of these (one click).
 --  Changing a server-side filter marks Search as pending; nothing searches
 --  on its own (a search needs a click).
---  Settings persist in GottaQueueEmAllDB.ui.browse.
+--  Settings persist in GottaQueueEmAllDB.ui.browse, presets in
+--  GottaQueueEmAllDB.filterPresets.
 -------------------------------------------------------------------------------
 local _, ns = ...
 local UI = ns.UI
@@ -25,8 +27,9 @@ local SORTS = { { "key", "Key" }, { "rating", "Rating" }, { "best", "Leader best
 local B = { results = {}, cards = {}, chips = {} }
 UI.Browse = B
 
-local DEFAULT = { dungeons = {}, minRating = 0, keyMin = 2, keyMax = 20, expMin = 2, expMax = 20, spot = true,
-                  fitLust = false, fitBrez = false, notDeclined = true, sort = "rating" }
+local KEY_TOP = D.KEY_TOP   -- the key slider's open top end (+30 and up)
+local DEFAULT = { dungeons = {}, minRating = 0, keyMin = 2, keyMax = KEY_TOP, expMin = 2, expMax = 20, spot = true,
+                  fitLust = false, fitBrez = false, notDeclined = true, upgrades = false, sort = "rating" }
 
 local function State()
     local db = ns.DB and ns.DB()
@@ -41,6 +44,11 @@ local function State()
     end
     for k, v in pairs(DEFAULT) do
         if st[k] == nil then st[k] = type(v) == "table" and {} or v end
+    end
+    -- The key slider ended at +20 before (= +20 and up): open it to the new top.
+    if st.keyTop ~= KEY_TOP then
+        if st.keyMax == 20 then st.keyMax = KEY_TOP end
+        st.keyTop = KEY_TOP
     end
     return st
 end
@@ -159,10 +167,11 @@ local function RatingText(v)
     B.ratingValue:SetTextColor(unpack(v > 0 and T.RatingColor(v) or C.label))
 end
 
--- A +2 .. +20 range as the sliders show it; the top end is open (+20 = +20 and up).
-local function RangeLabel(a, b)
-    if a == 2 and b == 20 then return "Any" end
-    if b == 20 then return "+" .. a .. " and up" end
+-- A +2 .. top range as the sliders show it; the top end is open (+20 = +20 and up).
+local function RangeLabel(a, b, top)
+    top = top or 20
+    if a == 2 and b == top then return "Any" end
+    if b == top then return "+" .. a .. " and up" end
     if a == b then return "+" .. a end
     return "+" .. a .. " – +" .. b
 end
@@ -173,10 +182,24 @@ local function PaintSorts()
     for _, s in ipairs(B.sorts) do s:SetVariant(B.st.sort == s.key and "ghost" or "mark") end
 end
 
+local HINT = "Dungeons, rating and your role go to the server; the rest filters here."
+local COOL = 5   -- s to wait after the server didn't answer
+
+-- The line under the button: what the search does, or what went wrong.
+local function Note(text, warn)
+    if not B.hint then return end
+    B.hint:SetText(text or HINT)
+    B.hint:SetTextColor(unpack(warn and C.goldText or B.hintColor))
+end
+
 local function PaintSearch()
     local b = B.searchBtn
+    local wait = B.coolUntil and math.ceil(B.coolUntil - GetTime())
     if B.searching then
         b:SetLabel("Searching…"); b:Disable()
+        B.pulse:Stop()
+    elseif wait and wait > 0 then
+        b:SetLabel(("Search again in %d s"):format(wait)); b:Disable()
         B.pulse:Stop()
     else
         b:Enable()
@@ -199,6 +222,7 @@ local function DoSearch()
         return
     end
     B.searching, B.dirty, B.ownSearch = true, false, true
+    Note()
     B.searchedMin = B.st.minRating or 0   -- the server left out groups below this
     B.searchSeq = (B.searchSeq or 0) + 1
     local seq = B.searchSeq
@@ -206,11 +230,19 @@ local function DoSearch()
     -- No answer at all (throttled): release the button after a while, unless
     -- a newer search is running by then.
     C_Timer.After(6, function()
-        if B.searching and seq == B.searchSeq then B.searching = false; PaintSearch() end
+        if not (B.searching and seq == B.searchSeq) then return end
+        B.searching = false
+        B.coolUntil = GetTime() + COOL
+        Note("No answer from the server: too many searches in a row. The button is free again in a few seconds.", true)
+        C_Timer.NewTicker(1, function(t)
+            PaintSearch()
+            if GetTime() >= B.coolUntil then t:Cancel(); B.coolUntil = nil; PaintSearch() end
+        end)
+        PaintSearch()
     end)
 end
 
-local function KeyText(a, b) B.keyValue:SetText(RangeLabel(a, b)) end
+local function KeyText(a, b) B.keyValue:SetText(RangeLabel(a, b, KEY_TOP)) end
 
 -- Key level: read from each group's title (UI/KeyRead.lua), filtered here.
 -- When WoW stops giving the measure away, the slider says so and rests.
@@ -227,13 +259,14 @@ local function BuildFilters(bar, row2)
 
     -- Key level: client-side, so it filters the results right away.
     local pk = W.Panel(bar)
-    pk:SetPoint("TOPLEFT"); pk:SetSize(220, 106)
-    local lk = W.Label(pk, "Key level"); lk:SetPoint("TOPLEFT", 12, -10)
+    pk:SetPoint("TOPLEFT"); pk:SetSize(250, 106)
     B.keyValue = W.Text(pk, "h2"); B.keyValue:SetPoint("TOPRIGHT", -12, -8)
+    local lk = W.Label(pk, "Key level"); lk:SetPoint("TOPLEFT", 12, -10)
+    lk:SetPoint("RIGHT", B.keyValue, "LEFT", -8, 0); lk:SetWordWrap(false)
     B.keyNote = W.Text(pk, "tiny")
     B.keyNote:SetPoint("TOPLEFT", 12, -32); B.keyNote:SetPoint("TOPRIGHT", -12, -32)
     B.keyNote:SetWordWrap(true)
-    B.keySlider = W.RangeSlider(pk, { min = 2, max = 20, step = 1, from = st.keyMin, to = st.keyMax })
+    B.keySlider = W.RangeSlider(pk, { min = 2, max = KEY_TOP, step = 1, from = st.keyMin, to = st.keyMax })
     B.keySlider:SetPoint("BOTTOMLEFT", 12, 12); B.keySlider:SetPoint("BOTTOMRIGHT", -12, 12)
     B.keySlider.onChange = function(lo, hi)
         st.keyMin, st.keyMax = lo, hi
@@ -243,9 +276,10 @@ local function BuildFilters(bar, row2)
 
     -- Min. leader rating: histogram of the results, gradient track, your rating.
     local p1 = W.Panel(bar)
-    p1:SetPoint("TOPLEFT", pk, "TOPRIGHT", 14, 0); p1:SetSize(300, 106)
-    local l1 = W.Label(p1, "Min. leader rating"); l1:SetPoint("TOPLEFT", 12, -10)
+    p1:SetPoint("TOPLEFT", pk, "TOPRIGHT", 14, 0); p1:SetSize(330, 106)
     B.ratingValue = W.Text(p1, "h2"); B.ratingValue:SetPoint("TOPRIGHT", -12, -8)
+    local l1 = W.Label(p1, "Min. leader rating"); l1:SetPoint("TOPLEFT", 12, -10)
+    l1:SetPoint("RIGHT", B.ratingValue, "LEFT", -8, 0); l1:SetWordWrap(false)
     B.hist = W.Histogram(p1, 12)
     B.hist:SetPoint("TOPLEFT", 12, -32); B.hist:SetPoint("TOPRIGHT", -12, -32); B.hist:SetHeight(32)
     local mine = C_ChallengeMode.GetOverallDungeonScore and D.Num(C_ChallengeMode.GetOverallDungeonScore()) or 0
@@ -279,12 +313,15 @@ local function BuildFilters(bar, row2)
         PlaceMine()
     end
     RatingText(st.minRating)
+    B.ratingSlider = s1
 
     -- Leader's best in that dungeon.
     local p2 = W.Panel(bar)
-    p2:SetPoint("TOPLEFT", p1, "TOPRIGHT", 14, 0); p2:SetSize(240, 106)
-    local l2 = W.Label(p2, "Leader's best here"); l2:SetPoint("TOPLEFT", 12, -10)
+    p2:SetPoint("TOPLEFT", p1, "TOPRIGHT", 14, 0); p2:SetSize(300, 106)
     B.rangeValue = W.Text(p2, "h2"); B.rangeValue:SetPoint("TOPRIGHT", -12, -8)
+    -- The label gives way to the value ("+14 and up"), never under it.
+    local l2 = W.Label(p2, "Leader's best here"); l2:SetPoint("TOPLEFT", 12, -10)
+    l2:SetPoint("RIGHT", B.rangeValue, "LEFT", -8, 0); l2:SetWordWrap(false)
     local note = W.Text(p2, "tiny")
     note:SetPoint("TOPLEFT", 12, -32); note:SetPoint("TOPRIGHT", -12, -32)
     note:SetWordWrap(true)
@@ -296,11 +333,23 @@ local function BuildFilters(bar, row2)
         RangeText(lo, hi); Render()
     end
     RangeText(st.expMin, st.expMax)
+    B.expSlider = s2
 
     -- Search: the primary action, right of the panels.
     B.searchBtn = W.Button(bar, "Search", "gold", nil, 44, "h2")
-    B.searchBtn:SetPoint("TOPLEFT", p2, "TOPRIGHT", 14, 0)
     B.searchBtn:SetPoint("TOPRIGHT", bar, "TOPRIGHT", 0, 0)
+    -- The panels share the width; the button keeps a fixed share of it
+    -- (narrow windows: panels at 29 / 38 / 33 %).
+    local function Fit()
+        local w = bar:GetWidth()
+        if w <= 0 then return end
+        local bw = min(max(floor(w * 0.17), 170), 240)
+        B.searchBtn:SetWidth(bw)
+        local room = w - bw - 3 * 14
+        pk:SetWidth(floor(room * 0.29)); p1:SetWidth(floor(room * 0.38)); p2:SetWidth(floor(room * 0.33))
+    end
+    bar:HookScript("OnSizeChanged", Fit)
+    Fit()
     B.searchBtn:SetScript("OnClick", DoSearch)
     B.pulse = A.Pulse(B.searchBtn, 0.55)
     B.pulse:Stop()
@@ -308,7 +357,8 @@ local function BuildFilters(bar, row2)
     hint:SetPoint("TOPLEFT", B.searchBtn, "BOTTOMLEFT", 2, -8)
     hint:SetPoint("TOPRIGHT", B.searchBtn, "BOTTOMRIGHT", -2, -8)
     hint:SetWordWrap(true)
-    hint:SetText("Dungeons, rating and your role go to the server; the rest filters here.")
+    B.hint, B.hintColor = hint, { hint:GetTextColor() }
+    Note()
 
     -- Row 2: client-side toggles, sort.
     local role = D.PlayerRole()
@@ -319,12 +369,14 @@ local function BuildFilters(bar, row2)
         { "notDeclined", "Not declined" },
     }
     local x = 0
+    B.toggles = {}
     for _, d in ipairs(toggles) do
         local t = W.Toggle(row2, d[2], d[3], d[4])
         t:SetPoint("LEFT", x, 0)
         x = x + t:GetWidth() + 6
         t:SetChecked(st[d[1]])
         if d[1] == "spot" then B.spotToggle = t end
+        B.toggles[d[1]] = t
         local server = d[5]
         t.onChange = function(v)
             st[d[1]] = v
@@ -354,6 +406,277 @@ local function BuildFilters(bar, row2)
 end
 
 -------------------------------------------------------------------------------
+--  Filter presets: all of the tab's filters under a name, back in one click
+-------------------------------------------------------------------------------
+local PRESET_KEYS = { "minRating", "keyMin", "keyMax", "expMin", "expMax", "spot", "fitLust", "fitBrez",
+                      "notDeclined", "upgrades", "sort" }
+local MAX_PRESETS = 20
+
+-- Account-wide: GottaQueueEmAllDB.filterPresets = { { name = ..., <filters> }, ... }.
+local function Presets()
+    local db = ns.DB and ns.DB()
+    if not db then B.tmpPresets = B.tmpPresets or {}; return B.tmpPresets end
+    if type(db.filterPresets) ~= "table" then db.filterPresets = {} end
+    return db.filterPresets
+end
+
+local function SameSet(a, b)
+    for id in pairs(a) do if not b[id] then return false end end
+    for id in pairs(b) do if not a[id] then return false end end
+    return true
+end
+
+local function Matches(p, st)
+    for _, k in ipairs(PRESET_KEYS) do if p[k] ~= st[k] then return false end end
+    return SameSet(p.dungeons or {}, st.dungeons)
+end
+
+-- A name from what the filters do, e.g. "+10 and up · 2500+ · 3 dungeons".
+local function AutoName(st)
+    local parts = {}
+    if not (st.keyMin == 2 and st.keyMax == KEY_TOP) then parts[#parts + 1] = RangeLabel(st.keyMin, st.keyMax, KEY_TOP) end
+    if (st.minRating or 0) > 0 then parts[#parts + 1] = st.minRating .. "+" end
+    local n = 0
+    for _ in pairs(st.dungeons) do n = n + 1 end
+    if n > 0 then parts[#parts + 1] = n == 1 and "1 dungeon" or (n .. " dungeons") end
+    if st.upgrades then parts[#parts + 1] = "upgrades" end
+    return #parts > 0 and table.concat(parts, " · ") or "All groups"
+end
+
+-- Panels, toggles, chips and sort show st again.
+local function Repaint()
+    local st = B.st
+    B.keySlider:SetValues(st.keyMin, st.keyMax)
+    st.keyMin, st.keyMax = B.keySlider.va, B.keySlider.vb   -- kept inside the slider
+    KeyText(st.keyMin, st.keyMax)
+    B.ratingSlider:SetValue(st.minRating); RatingText(st.minRating)
+    B.expSlider:SetValues(st.expMin, st.expMax)
+    st.expMin, st.expMax = B.expSlider.va, B.expSlider.vb
+    RangeText(st.expMin, st.expMax)
+    for k, t in pairs(B.toggles) do t:SetChecked(st[k]) end
+    local any = false
+    for i = 2, #B.chips do
+        local c = B.chips[i]
+        c:SetOn(st.dungeons[c.groupID] and true or false)
+        any = any or c.on
+    end
+    if B.chips[1] then B.chips[1]:SetOn(not any) end
+    PaintSorts()
+end
+
+local function LoadPreset(p)
+    local st = B.st
+    -- Dungeons of this season only (a preset from an earlier one would
+    -- filter every search to nothing).
+    local current = {}
+    for i = 2, #B.chips do current[B.chips[i].groupID] = true end
+    local dungeons = {}
+    for id in pairs(p.dungeons or {}) do
+        if current[id] or #B.chips < 2 then dungeons[id] = true end
+    end
+    -- What goes to the server: a new search (rating raised filters here).
+    local server = not SameSet(dungeons, st.dungeons) or (p.spot ~= nil and p.spot ~= st.spot)
+        or (p.minRating or 0) < (B.searchedMin or 0)
+    for _, k in ipairs(PRESET_KEYS) do
+        if p[k] ~= nil then st[k] = p[k] end
+    end
+    wipe(st.dungeons)
+    for id in pairs(dungeons) do st.dungeons[id] = true end
+    Repaint()
+    if server then MarkDirty() end
+    Render()
+end
+
+local function SavePreset(name)
+    local list, st = Presets(), B.st
+    name = (name or ""):gsub("|", "||")
+    if name == "" then name = AutoName(st) end
+    local p = { name = name, dungeons = {} }
+    for id in pairs(st.dungeons) do p.dungeons[id] = true end
+    for _, k in ipairs(PRESET_KEYS) do p[k] = st[k] end
+    for i, o in ipairs(list) do
+        if o.name == name then list[i] = p; return true end
+    end
+    if #list >= MAX_PRESETS then
+        ns.Print(("up to %d presets: delete one first."):format(MAX_PRESETS))
+        return false
+    end
+    list[#list + 1] = p
+    return true
+end
+
+local function DeletePreset(p)
+    local list = Presets()
+    for i = #list, 1, -1 do if list[i] == p then table.remove(list, i) end end
+end
+
+-------------------------------------------------------------------------------
+--  Presets popover: under the Presets button, in the window's look
+-------------------------------------------------------------------------------
+local POP_W, ROW_H = 290, 28
+local pop, FillPop
+
+local function PaintRow(row)
+    local on = row.p and Matches(row.p, B.st)
+    W.Fill(row.bg, row.hot and C.badge or (on and { 0.82, 0.64, 0.30, 0.10 } or { 0, 0, 0, 0 }))
+    row.dot:SetVertexColor(unpack(on and C.gold or C.faint))
+    row.name:SetTextColor(unpack((on or row.hot) and C.textHi or C.text2))
+    row.x:SetTextColor(unpack(row.xHot and C.badText or C.muted))
+end
+
+-- One preset: click loads it, the x on the right deletes it.
+local function NewRow()
+    local row = CreateFrame("Button", nil, pop)
+    row:SetHeight(ROW_H)
+    row.bg = W.Round(row, "BACKGROUND")
+    row.bg:SetAllPoints()
+    row.dot = W.Circle(row, "ARTWORK", nil, 8)
+    row.dot:SetPoint("LEFT", 10, 0)
+    row.name = W.Text(row, "bodySm")
+    row.name:SetPoint("LEFT", 26, 0); row.name:SetPoint("RIGHT", -32, 0)
+    row.del = CreateFrame("Button", nil, row)
+    row.del:SetSize(26, 24); row.del:SetPoint("RIGHT", -3, 0)
+    row.x = W.Text(row.del, "button"); row.x:SetPoint("CENTER"); row.x:SetText("×")
+    row:SetScript("OnEnter", function(self) self.hot = true; PaintRow(self) end)
+    row:SetScript("OnLeave", function(self) self.hot = false; PaintRow(self) end)
+    -- Loads and searches at once (unless the server still wants a pause).
+    row:SetScript("OnClick", function(self)
+        LoadPreset(self.p); pop:Hide()
+        if not (B.coolUntil and GetTime() < B.coolUntil) then DoSearch() end
+    end)
+    row.del:SetScript("OnEnter", function() row.hot, row.xHot = true, true; PaintRow(row) end)
+    row.del:SetScript("OnLeave", function() row.hot, row.xHot = false, false; PaintRow(row) end)
+    row.del:SetScript("OnClick", function() DeletePreset(row.p); FillPop() end)
+    return row
+end
+
+FillPop = function()
+    local list = Presets()
+    local y = -34
+    for i, p in ipairs(list) do
+        local row = pop.rows[i] or NewRow()
+        pop.rows[i] = row
+        row.p = p
+        row.hot, row.xHot = false, false
+        row.name:SetText(p.name)
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", 6, y); row:SetPoint("TOPRIGHT", -6, y)
+        row:Show()
+        PaintRow(row)
+        y = y - ROW_H
+    end
+    for i = #list + 1, #pop.rows do pop.rows[i]:Hide() end
+    pop.none:SetShown(#list == 0)
+    if #list == 0 then y = y - 22 end
+    pop.line:ClearAllPoints()
+    pop.line:SetPoint("TOPLEFT", 12, y - 8); pop.line:SetPoint("TOPRIGHT", -12, y - 8)
+    pop.saveLabel:ClearAllPoints()
+    pop.saveLabel:SetPoint("TOPLEFT", 14, y - 20)
+    pop.box:ClearAllPoints()
+    pop.box:SetPoint("TOPLEFT", 12, y - 40); pop.box:SetPoint("RIGHT", pop.save, "LEFT", -8, 0)
+    pop.save:ClearAllPoints()
+    pop.save:SetPoint("TOPRIGHT", -12, y - 40)
+    pop.hint:SetText(AutoName(B.st))   -- the name an empty box saves under
+    pop:SetHeight(-(y - 40) + 28 + 12)
+end
+
+local function BuildPop()
+    pop = CreateFrame("Frame", nil, B.page)
+    pop:SetSize(POP_W, 120)
+    pop:SetPoint("TOPRIGHT", B.presetBtn, "BOTTOMRIGHT", 0, -6)
+    pop:SetFrameStrata("DIALOG")
+    pop:SetToplevel(true)
+    pop:SetClampedToScreen(true)
+    pop:EnableMouse(true)
+    pop.bg = W.Round(pop, "BACKGROUND", C.raised)
+    pop.bg:SetAllPoints()
+    W.Border(pop, C.lineStrong)
+    pop.rows = {}
+    local title = W.Label(pop, "Filter presets"); title:SetPoint("TOPLEFT", 14, -12)
+    pop.none = W.Text(pop, "small")
+    pop.none:SetPoint("TOPLEFT", 14, -36)
+    pop.none:SetText("None saved yet.")
+    pop.line = W.Tex(pop, "ARTWORK", C.line)
+    PixelUtil.SetHeight(pop.line, 1, 1)
+    pop.saveLabel = W.Label(pop, "Save current filters")
+
+    pop.box = CreateFrame("Frame", nil, pop)
+    pop.box:SetHeight(28)
+    local bg = W.Round(pop.box, "BACKGROUND", C.bg); bg:SetAllPoints()
+    W.Border(pop.box, C.lineStrong)
+    local eb = CreateFrame("EditBox", nil, pop.box)
+    eb:SetAllPoints()
+    eb:SetFontObject(T.Font.bodySm)
+    eb:SetTextColor(unpack(C.textHi))
+    eb:SetTextInsets(10, 10, 0, 0)
+    eb:SetAutoFocus(false)
+    eb:SetMaxLetters(40)
+    pop.hint = W.Text(pop.box, "bodySm", C.faint)
+    pop.hint:SetPoint("LEFT", 10, 0); pop.hint:SetPoint("RIGHT", -10, 0)
+    pop.save = W.Button(pop, "Save", "gold", 74, 28)
+
+    local function Save()
+        if SavePreset(strtrim(eb:GetText() or "")) then
+            eb:SetText(""); eb:ClearFocus()
+            FillPop()
+        end
+    end
+    pop.save:SetScript("OnClick", Save)
+    eb:SetScript("OnEnterPressed", Save)
+    eb:SetScript("OnEscapePressed", function(self) self:ClearFocus(); pop:Hide() end)
+    eb:SetScript("OnTextChanged", function(self) pop.hint:SetShown(self:GetText() == "") end)
+    eb:SetScript("OnEditFocusGained", function() W.SetBorder(pop.box, C.gold) end)
+    eb:SetScript("OnEditFocusLost", function() W.SetBorder(pop.box, C.lineStrong) end)
+    pop.edit = eb
+
+    -- A click anywhere else closes it (the button toggles it itself).
+    pop:SetScript("OnEvent", function(self)
+        if not (self:IsMouseOver() or B.presetBtn:IsMouseOver()) then self:Hide() end
+    end)
+    pop:SetScript("OnShow", function(self) self:RegisterEvent("GLOBAL_MOUSE_DOWN") end)
+    pop:SetScript("OnHide", function(self)
+        self:UnregisterEvent("GLOBAL_MOUSE_DOWN")
+        eb:ClearFocus()
+    end)
+    pop:Hide()
+end
+
+local function TogglePresets()
+    if pop and pop:IsShown() then pop:Hide(); return end
+    if not pop then BuildPop() end
+    FillPop()
+    pop:Show()
+end
+
+-- Right of the count line: Upgrades only (client-side) and Presets.
+local function BuildTools(page, scroll)
+    local st = B.st
+    local tools = CreateFrame("Frame", nil, page)
+    tools:SetHeight(22)
+    tools:SetPoint("BOTTOMRIGHT", scroll, "TOPRIGHT", 0, 4)
+    local pb = W.Button(tools, "Presets", "mark", nil, 22, "tiny")
+    pb:SetWidth(pb.label:GetStringWidth() + 18)
+    pb:SetPoint("RIGHT")
+    pb:SetScript("OnClick", TogglePresets)
+    B.presetBtn = pb
+    local up = W.Toggle(tools, "Upgrades only", nil, nil, 22)
+    up:SetPoint("RIGHT", pb, "LEFT", -6, 0)
+    up:SetChecked(st.upgrades)
+    up.onChange = function(v) st.upgrades = v; Render() end
+    up:HookScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:SetText("Upgrades only", 1, 1, 1)
+        GameTooltip:AddLine("Keys that could raise your Mythic+ score, timed: above your best in-time run in "
+            .. "that dungeon. An estimate. Groups whose key can't be read stay.", 0.8, 0.8, 0.8, true)
+        GameTooltip:Show()
+    end)
+    up:HookScript("OnLeave", function() GameTooltip:Hide() end)
+    B.toggles.upgrades = up
+    tools:SetWidth(up:GetWidth() + 6 + pb:GetWidth())
+    B.tools = tools
+end
+
+-------------------------------------------------------------------------------
 --  Result cards
 -------------------------------------------------------------------------------
 local function Tooltip(card)
@@ -376,6 +699,14 @@ local function Tooltip(card)
         if n > 0 then spots[#spots + 1] = (n > 1 and (n .. " ") or "") .. ROLE_NAME[role] end
     end
     if #spots > 0 then GameTooltip:AddLine("Open: " .. table.concat(spots, ", "), 0.6, 0.65, 0.72) end
+    local up, timed = D.Upgrade(r)
+    if up then
+        GameTooltip:AddLine("Upgrade for you, timed: " .. (timed > 0 and ("your best here in time is +" .. timed)
+            or "no timed run here yet"), C.goodText[1], C.goodText[2], C.goodText[3])
+    elseif up == false then
+        GameTooltip:AddLine("No upgrade for you: your best here is higher", 0.6, 0.65, 0.72)
+    end
+    UI.Region.AddTooltipLine(GameTooltip, r.leaderFull)   -- the leader's country and realm
     -- The leader's Raider.IO profile (if installed).
     if r.leaderFull then
         GameTooltip:AddLine(" ")
@@ -449,6 +780,11 @@ local function NewCard(parent)
     c.stalePill:SetHeight(20)
     c.stalePill.text:SetTextColor(unpack(C.stale))
     c.stalePill:Hide()
+    -- This key, timed, would raise your score (D.Upgrade).
+    c.upPill = W.Pill(c, "Upgrade", { C.good[1], C.good[2], C.good[3], 0.5 }, { 0, 0, 0, 0 })
+    c.upPill:SetHeight(20)
+    c.upPill.text:SetTextColor(unpack(C.goodText))
+    c.upPill:Hide()
 
     c.btn = W.Button(c, "Sign up", "ghost", 100)
     c.btn:SetPoint("RIGHT", -14, 0)
@@ -517,7 +853,7 @@ local function FillCard(c, r)
     c.title:SetWidth(max(40, c:GetWidth() - STRIP_W - 14 - c.name:GetStringWidth() - 10 - 260))
 
     local leader = r.leader or "?"
-    local line = T.ColorCode(T.ClassColor(r.leaderClass)) .. leader .. "|r"
+    local line = UI.Region.Markup(r.leaderFull) .. T.ColorCode(T.ClassColor(r.leaderClass)) .. leader .. "|r"
     if r.leaderSpec then line = line .. "  |cff8d98a8" .. r.leaderSpec .. "|r" end
     line = line .. D.MainTag(r.leaderFull, r.rating)   -- Raider.IO: an alt with a stronger main
     if r.best then
@@ -574,6 +910,10 @@ local function FillCard(c, r)
     local ps = D.PlaystyleLabel(r.playstyle)
     c.style:SetShown(ps ~= nil)
     if ps then c.style:SetText(ps); c.style:SetPoint("LEFT", x, "RIGHT", 8, 0); x = c.style end
+    local up = D.Upgrade(r)
+    c.upPill:ClearAllPoints()
+    c.upPill:SetShown(up or false)
+    if up then c.upPill:SetPoint("LEFT", x, "RIGHT", 8, 0); x = c.upPill end
     c.stalePill:ClearAllPoints()
     c.stalePill:SetPoint("LEFT", x, "RIGHT", 8, 0)
 
@@ -660,6 +1000,8 @@ Render = function(animate)
         B.empty:Hide()
         B.count:SetText(("|cfff5f7fa%d|r %s%s"):format(#list, #list == 1 and "group" or "groups", hiddenText))
     end
+    -- The line ends before the tools on its right (Upgrades only, Presets).
+    if B.tools then B.count:SetWidth(max(120, B.scroll:GetWidth() - B.tools:GetWidth() - 16)) end
     if B.hist then UpdateHistogram() end
 end
 
@@ -761,7 +1103,10 @@ events:SetScript("OnEvent", function(_, event, arg1)
         -- Next frame: the result list is complete by then.
         C_Timer.After(0, Load)
     elseif event == "LFG_LIST_SEARCH_FAILED" then
-        if B.searching then ns.Print("search failed" .. (D.Str(arg1) and (" (" .. arg1 .. ")") or "") .. ".") end
+        if B.searching then
+            ns.Print("search failed" .. (D.Str(arg1) and (" (" .. arg1 .. ")") or "") .. ".")
+            Note("The search failed. Try again in a moment.", true)
+        end
         B.searching = false
         PaintSearch()
     elseif event == "LFG_LIST_SEARCH_RESULT_UPDATED" or event == "LFG_LIST_APPLICATION_STATUS_UPDATED" then
@@ -838,6 +1183,8 @@ function UI.BuildBrowse(page)
         self:SetVerticalScroll(min(limit, max(0, self:GetVerticalScroll() - d * (CardH() + CARD_GAP))))
     end)
     B.scroll = scroll
+    B.count:SetWordWrap(false)
+    BuildTools(page, scroll)
 
     B.empty = W.Text(page, "body", C.muted)
     B.empty:SetPoint("TOP", scroll, "TOP", 0, -60)

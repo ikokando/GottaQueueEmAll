@@ -6,6 +6,7 @@
 --  /gotta settings        the settings page (Options > AddOns)
 --  /gotta help            these commands
 --  /gotta welcome         the welcome screen again
+--  /gotta keystone        preview of the keystone window
 --  /gotta keyprobe        whether key levels can be read from titles (for bug reports)
 --  /gotta deserter        preview of the Keystone Deserter marks (on / off)
 -------------------------------------------------------------------------------
@@ -49,11 +50,18 @@ local DEFAULTS = {
     -- Alerts (UI/Alert.lua): when you're invited, when someone applies.
     alertInvite = true, alertApply = true,
     inviteCard = true,         -- invites answered in our card (UI/Invite.lua), not Blizzard's window
-    alertScreen = "both",      -- "both" (edge + message), "glow", "toast", "off"
+    alertScreen = "glow",      -- the gold edge: "glow" or "off" ("both" and "toast" from before: glow, off)
     alertSound = true, alertSoundKit = "chime",
     alertFlash = true,         -- the taskbar icon, while WoW is in the background
     markStale = true,          -- "Listed a while" on old, nearly empty groups
+    leaderRegion = true,       -- a flag for the leader's realm (UI/Region.lua)
     footerVault = true,        -- Great Vault and affixes in the footer
+    -- The keystone window at the Font of Power (UI/Keystone.lua).
+    keystoneWindow = true,     -- ours, not Blizzard's
+    keystoneAutoStart = true,  -- Activate: the pull timer, then the key starts at 0
+    keystoneReadyFirst = true, -- Activate: a ready check first (leader or assistant)
+    pullTimer = 10,            -- seconds, the slider's last value
+    keystoneWide = true,       -- two columns (fits any screen at full size); off: one, like the design
 }
 
 -- Settings of the 0.x sidebar addon, and logs of pre-release test builds;
@@ -214,6 +222,7 @@ local function Help()
     print("  /gotta  -  open / close the window (also /gqea)")
     print("  /gotta settings  -  the settings page")
     print("  /gotta welcome  -  the welcome screen again")
+    print("  /gotta keystone  -  preview the keystone window")
     print("  /gotta keyprobe  -  check whether key levels can be read (for bug reports)")
     print("  /gotta deserter  -  preview how Keystone Deserters are shown (on / off)")
 end
@@ -227,6 +236,8 @@ SlashCmdList.GOTTAQUEUEEMALL = function(msg)
         ns.OpenSettings()
     elseif msg == "welcome" and ns.UI and ns.UI.ShowWelcome then
         ns.UI.ShowWelcome()
+    elseif msg == "keystone" and ns.UI and ns.UI.Keystone then
+        ns.UI.Keystone.Preview()
     elseif msg == "keyprobe" and ns.UI and ns.UI.KeyProbe then
         ns.UI.KeyProbe.Run()
     elseif msg == "deserter" then

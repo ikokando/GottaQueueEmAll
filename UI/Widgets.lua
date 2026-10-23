@@ -88,6 +88,13 @@ function W.Lines(f, color, layer)
     W.SetBorder(f, color or C.line)
 end
 
+-- A fill color whose alpha goes on the texture itself: sliced textures can
+-- drop the vertex color's alpha and draw opaque.
+function W.Fill(t, color)
+    t:SetVertexColor(color[1], color[2], color[3], 1)
+    t:SetAlpha(color[4] or 1)
+end
+
 function W.SetBorder(f, color)
     for _, t in ipairs(f.gqBorder) do t:SetVertexColor(unpack(color)) end
 end
@@ -321,7 +328,7 @@ end
 -------------------------------------------------------------------------------
 local function PaintSwitch(s)
     local on = s.checked
-    s.bg:SetVertexColor(unpack(on and { 0.82, 0.64, 0.30, 0.25 } or C.track))
+    W.Fill(s.bg, on and { 0.82, 0.64, 0.30, 0.25 } or C.track)
     W.SetBorder(s, on and { 0.82, 0.64, 0.30, 0.6 } or (s.hot and { 0.63, 0.71, 0.84, 0.3 } or C.lineStrong))
     s.knob:SetVertexColor(unpack(on and C.goldLight or C.muted))
     s.knob:ClearAllPoints()
@@ -591,6 +598,12 @@ function W.Slider(parent, opts)
 end
 
 -- Two thumbs; the gold fill spans the range. onChange(lo, hi).
+-- Thumbs that meet are drawn side by side (SPLIT px apart, the fill between
+-- them), so both stay visible and each can be grabbed: the one under the
+-- cursor moves. Grabbed right between them, the first move decides: left
+-- takes the lower thumb, right the upper one.
+local SPLIT = 12
+
 function W.RangeSlider(parent, opts)
     local s = CreateFrame("Frame", nil, parent)
     s:SetHeight(22)
@@ -605,6 +618,11 @@ function W.RangeSlider(parent, opts)
         local w = self:GetWidth()
         if w <= 0 or not self.va then return end
         local xa, xb = Frac(self, self.va) * w, Frac(self, self.vb) * w
+        if xb - xa < SPLIT then
+            local mid = (xa + xb) / 2
+            xa, xb = mid - SPLIT / 2, mid + SPLIT / 2
+        end
+        self.xa, self.xb = xa, xb   -- where they are drawn (Grab)
         self.a:ClearAllPoints(); self.a:SetPoint("CENTER", self, "LEFT", xa, 0)
         self.b:ClearAllPoints(); self.b:SetPoint("CENTER", self, "LEFT", xb, 0)
         self.fill:ClearAllPoints()
@@ -620,13 +638,27 @@ function W.RangeSlider(parent, opts)
         self:Layout()
         if fire and changed and self.onChange then self.onChange(va, vb) end
     end
-    -- The thumb nearest to the click follows the mouse.
+    -- The thumb drawn nearest to the click follows the mouse; a click right
+    -- between two close thumbs waits for the first move (Pick).
     function s:Grab(v)
-        self.which = math.abs(v - self.va) <= math.abs(v - self.vb) and "a" or "b"
-        if self.va == self.vb then self.which = v < self.va and "a" or "b" end
+        local x = GetCursorPosition() / self:GetEffectiveScale() - self:GetLeft()
+        local da, db = math.abs(x - (self.xa or 0)), math.abs(x - (self.xb or 0))
+        if math.abs(da - db) < 3 and da < 12 then
+            self.which, self.grabV = nil, v
+            return
+        end
+        self.which = da <= db and "a" or "b"
         self:Pick(v)
     end
     function s:Pick(v)
+        if not self.which then
+            if v == self.grabV then return end
+            self.which = self.grabV and v < self.grabV and "a" or "b"
+        end
+        -- The moving thumb on top.
+        local base = self:GetFrameLevel()
+        self[self.which]:SetFrameLevel(base + 3)
+        self[self.which == "a" and "b" or "a"]:SetFrameLevel(base + 2)
         if self.which == "a" then self:SetValues(min(v, self.vb), self.vb, true)
         else self:SetValues(self.va, max(v, self.va), true) end
     end

@@ -255,6 +255,7 @@ local function New(cfg)
             killed = {},
             T = 0, H = 0, D = 0,
         }
+        r.leaderFull = r.leader   -- "Name-Realm", for the region flag
         if r.leader then r.leader = Ambiguate(r.leader, "short") end
         local li = C_LFGList.GetSearchResultLeaderInfo and C_LFGList.GetSearchResultLeaderInfo(id)
         if type(li) == "table" then r.leaderClass, r.leaderSpec = D.Str(li.classFilename), D.Str(li.specName) end
@@ -632,6 +633,7 @@ local function New(cfg)
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine(("%d %s · %d %s · %d %s"):format(r.T, ROLE_NAME.TANK, r.H, ROLE_NAME.HEALER, r.D, ROLE_NAME.DAMAGER),
             0.8, 0.8, 0.8)
+        UI.Region.AddTooltipLine(GameTooltip, r.leaderFull)   -- the leader's country and realm
         GameTooltip:Show()
     end
 
@@ -738,7 +740,7 @@ local function New(cfg)
         pcall(c.title.SetText, c.title, r.title)
         c.title:SetWidth(max(40, c:GetWidth() - STRIP_W - 14 - c.name:GetStringWidth() - 10 - 290))
 
-        local line = T.ColorCode(T.ClassColor(r.leaderClass)) .. (r.leader or "?") .. "|r"
+        local line = UI.Region.Markup(r.leaderFull) .. T.ColorCode(T.ClassColor(r.leaderClass)) .. (r.leader or "?") .. "|r"
         if r.leaderSpec then line = line .. "  |cffc3cbd6" .. r.leaderSpec .. "|r" end
         line = line .. "  |cff8d98a8·  " .. (r.ilvl > 0 and ("item level " .. r.ilvl .. "+") or "any item level") .. "|r"
         local lockout
