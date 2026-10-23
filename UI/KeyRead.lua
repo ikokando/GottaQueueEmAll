@@ -17,6 +17,11 @@
 --   - "+14 Relaxed" ends in a word: wrapped narrow, WoW breaks it into "+1"
 --     and "4 Relaxed"; the first line is the widest, and its width gives
 --     the first digit (FontString:GetWrappedWidth; tested on its own, KR.words).
+--   - several "+" in front ("++19 push", "+++17"): two to four are tried
+--     when one or none doesn't add up, the fewest that do win,
+--   - a title ending in "+" ("20+", "+17++"): its last glyph's advance is
+--     the "+"'s; up to four "+" are tried, the fewest that add up wins.
+--   Both: KR.ends, tested on its own like KR.words.
 --  More than two digits (custom titles) -> nil. It tests itself on known
 --  titles first (KR.Works); when WoW stops giving real widths it turns off
 --  and the window shows titles as before.
@@ -45,8 +50,9 @@ KR.diag = {}   -- what the last self-test saw, for /gotta keyprobe
 
 local host, full, lines
 -- Measured at the self-test, in reported units: scale (per font px), the
--- width of "~", WoW's extra per glyph, a digit's ink, "+" with its extra.
-local scale, tilde, extra, ink, plus
+-- width of "~", WoW's extra per glyph, a digit's ink, "+" with its extra,
+-- the ink of "+".
+local scale, tilde, extra, ink, plus, plusInk
 local state, tries, nextTry = "new", 0, 0
 local cache, cached = {}, 0
 
@@ -70,11 +76,20 @@ local function Digit(adv)
     if d >= 0 and d <= 9 and abs(adv - (BASE + STEP * d)) <= TOL then return d end
 end
 
--- The title's last glyph, when it is a digit.
-local function LastDigit(title)
+-- The title's last glyph: a digit (its value), "+", or nil (a letter).
+local function LastGlyph(title)
     local w1, w2 = Width(title), Width(title .. "~")
     if not (w1 and w2) then return end
-    return Digit((w2 - w1 - tilde - extra + ink) / scale)
+    local rest = w2 - w1 - tilde - extra   -- the last glyph's advance less its ink
+    local d = Digit((rest + ink) / scale)
+    if d then return d end
+    if plusInk and abs((rest + plusInk) / scale - PLUS) <= TOL then return "+" end
+end
+
+-- The title's last glyph, when it is a digit.
+local function LastDigit(title)
+    local g = LastGlyph(title)
+    return type(g) == "number" and g or nil
 end
 
 -- Wrapped narrower than "+" and two digits, WoW breaks "+14 Relaxed" into
@@ -91,21 +106,42 @@ local function FirstDigit(title)
     return Digit((w - plus) / scale)
 end
 
+-- The first digit of a title starting with own "+" ("++19 push": 2): ours
+-- go in front up to five, and wrapped as wide as five "+" and one digit,
+-- the first line holds them and the first digit only. With five in front
+-- it is also the widest line, even when a later one ends in "+" ("7++").
+-- A wrong own leaves too many or too few "+" on it: no digit.
+local LEAD = 5
+local function FirstDigitLead(title, own)
+    if not (lines and lines.GetWrappedWidth) or own > LEAD then return end
+    if not pcall(lines.SetText, lines, ("+"):rep(LEAD - own) .. title) then return end
+    lines:SetWidth((LEAD * PLUS + BASE + 14 * STEP) * scale)
+    local ok, w = pcall(lines.GetWrappedWidth, lines)
+    w = ok and Num(w)
+    return w and Digit((w - LEAD * plus) / scale)
+end
+
 -- The level a title's digits make, given its advance without the "+" it is
--- assumed to have (hasPlus), or nil when the digits don't add up.
-local function Read(title, a, hasPlus)
+-- assumed to have (hasPlus), or nil when the digits don't add up. A title
+-- ending in "+" (endsPlus) gives no last digit. lead: the title is taken
+-- to start with that many "+"; the first digit then comes from
+-- FirstDigitLead, which also checks a one-digit reading.
+local function Read(title, a, hasPlus, endsPlus, lead)
     local count = floor(a / BASE)
     if count < 1 or count > 2 then return end
     local sum = floor((a - count * BASE) / STEP)
     if sum > 9 * count then return end
-    local last = LastDigit(title)
+    local last = not endsPlus and LastDigit(title) or nil
+    local first
+    if lead then
+        if not last then first = FirstDigitLead(title, lead) end
+    elseif not last and KR.words then first = FirstDigit(hasPlus and title or ("+" .. title)) end   -- our own "+" in front
     if count == 1 then
         if last and last ~= sum then return end
+        if (endsPlus or lead) and first and first ~= sum then return end
         return sum
     end
-    local first
-    if last then first = sum - last
-    elseif KR.words then first = FirstDigit(hasPlus and title or ("+" .. title)) end   -- our own "+" in front
+    if last then first = sum - last end
     if not first or first < 1 or first > 9 or sum - first < 0 or sum - first > 9 then return end
     return first * 10 + (sum - first)
 end
@@ -116,15 +152,34 @@ end
 local function Measure(title)
     local a = Advance(title)
     if not a then return end
+    -- "20+", "+17++", "++17+": one to four "+" (some of them in front),
+    -- the fewest that give a level.
+    if KR.ends and LastGlyph(title) == "+" then
+        for n = 1, 4 do
+            for own = 0, n - 1 do
+                local level = Read(title, a - n * plus / scale, true, true, own)
+                if level then return level >= 2 and level <= 40 and level or nil end
+            end
+        end
+        return
+    end
     local with, without = Read(title, a - plus / scale, true), Read(title, a, false)
     local level
     if with and not without then level = with elseif without and not with then level = without end
+    -- "++19 push", "+++17": several "+" in front, the fewest that give a level.
+    if not with and not without and KR.ends then
+        for n = 2, 4 do
+            level = Read(title, a - n * plus / scale, true, false, n)
+            if level then break end
+        end
+    end
     -- Custom titles can line digits up into nonsense ("+9 ... 3k" -> 93).
     if level and level >= 2 and level <= 40 then return level end
 end
 
 local KNOWN = { ["+2"] = 2, ["+9"] = 9, ["+20"] = 20, ["+13"] = 13, ["+31"] = 31, ["+19"] = 19,
                 ["+9 Relaxed"] = 9, ["14"] = 14, ["9"] = 9, ["20"] = 20, ["10"] = 10 }
+local ENDS = { ["++19 push"] = 19, ["+++17"] = 17, ["++8"] = 8, ["+++21 Relaxed"] = 21, ["++17+"] = 17, ["20+"] = 20, ["+17++"] = 17, ["15+"] = 15, ["+15+"] = 15, ["+9+"] = 9, ["12++"] = 12 }
 local WORDS = { ["+12 Relaxed"] = 12, ["+21 Competitive"] = 21, ["+19 Carry Offered"] = 19, ["+30 Learning"] = 30,
                 ["14 Relaxed"] = 14, ["21 push"] = 21 }
 
@@ -168,19 +223,26 @@ local function Calibrate()
     tilde, extra, ink = t1, t2 - t1, i0
     scale = (z - t1 - extra) / BASE
     plus = p0 - i0   -- "+" with its extra
+    plusInk = Width("+")
     if scale <= 0 then return false, "no width" end
     if abs((n - t1 - extra) / scale - (BASE + 9 * STEP)) > TOL or abs(plus / scale - PLUS) > TOL then
         return false, "digit widths (not the measuring font)"
     end
     local letters = Advance("Relaxed")
     if not letters or letters > STEP / 4 then return false, "letters not empty" end
-    KR.words = false
+    KR.words, KR.ends = false, false
     local ok, why = Check(KNOWN, d)
     if not ok then return false, why end
     -- Titles with a word after the key: a bonus, tested on its own.
     KR.words = true
     KR.words = Check(WORDS, d)
     d[#d + 1] = "titles with a word after the key: " .. (KR.words and "read" or "not read")
+    -- Titles ending in "+" ("20+", "+17++"): they need the first line's digit.
+    if KR.words then
+        KR.ends = true
+        KR.ends = Check(ENDS, d)
+    end
+    d[#d + 1] = "titles ending in \"+\": " .. (KR.ends and "read" or "not read")
     return true
 end
 

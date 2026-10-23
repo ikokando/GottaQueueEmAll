@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.2
+
+- **Key level from titles like "20+", "+17++", "++19 push" or "+++17":** several "+" before
+  or after the key no longer stop it from being read, so these groups now show their level
+  and the key level filter applies to them. Before they were left unread (always shown) or, rarely, misread
+  ("13+" as 31).
+- **Raid and Mythic 0 layout:** the filter panels and the Search button are laid out as on
+  Mythic+: Search keeps its width on the right, the panels share the rest.
+
 ## 1.4.1
 
 - **Player ratings (Mythic+):** after a key (in time, over time or ended early) a window lists

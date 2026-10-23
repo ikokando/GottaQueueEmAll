@@ -552,8 +552,29 @@ local function New(cfg)
 
         -- Search
         RB.searchBtn = W.Button(bar, "Search", "gold", nil, 44, "h2")
-        RB.searchBtn:SetPoint("TOPLEFT", ps, "TOPRIGHT", 14, 0)
         RB.searchBtn:SetPoint("TOPRIGHT", bar, "TOPRIGHT", 0, 0)
+        -- As on Mythic+ (UI/Browse.lua): the button keeps a fixed share of
+        -- the width, the panels share the rest (in their own proportions).
+        local panels = { { pd, 220 }, { pk, 300 }, { ps, 240 } }
+        local function Fit()
+            local w = bar:GetWidth()
+            if w <= 0 then return end
+            local bw = min(max(floor(w * 0.17), 170), 240)
+            RB.searchBtn:SetWidth(bw)
+            local total, n = 0, 0
+            for _, e in ipairs(panels) do if e[1] then total = total + e[2]; n = n + 1 end end
+            local room = w - bw - n * 14
+            for _, e in ipairs(panels) do
+                if e[1] then e[1]:SetWidth(floor(room * e[2] / total)) end
+            end
+            -- Difficulty buttons fill their panel.
+            if pd then
+                local dw = floor((pd:GetWidth() - 24 - (#DIFF_ORDER - 1) * 6) / #DIFF_ORDER)
+                for _, b in pairs(RB.diffs) do b:SetWidth(dw) end
+            end
+        end
+        bar:HookScript("OnSizeChanged", Fit)
+        Fit()
         RB.searchBtn:SetScript("OnClick", DoSearch)
         local hint = W.Text(bar, "tiny")
         hint:SetPoint("TOPLEFT", RB.searchBtn, "BOTTOMLEFT", 2, -8)
