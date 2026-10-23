@@ -381,6 +381,7 @@ local function Fill(r)
     local flag = UI.Region and UI.Region.Markup(r.leaderFull or r.leader) or ""
     local leader = r.leader and (T.ColorCode(T.ClassColor(r.leaderClass)) .. r.leader .. "|r") or "|cff8d98a8?|r"
     if r.leaderSpec then leader = leader .. "  |cff8d98a8" .. r.leaderSpec .. "|r" end
+    if r.mplus and UI.Ratings then leader = leader .. UI.Ratings.Inline(r.leaderFull or r.leader) end   -- GOOD / BAD
     card.leader:SetText(flag .. leader)
     local code, realm
     if flag ~= "" then code, realm = UI.Region.Of(r.leaderFull or r.leader) end

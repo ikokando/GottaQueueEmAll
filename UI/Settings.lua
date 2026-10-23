@@ -68,6 +68,7 @@ local function SwitchRow(panel, key, titleText, desc, onChange, reserve)
     switches[key] = s
     return r, s
 end
+SE.Panel, SE.SwitchRow = Panel, SwitchRow   -- for the player ratings page (UI/Ratings.lua)
 
 -------------------------------------------------------------------------------
 --  Build
@@ -101,6 +102,10 @@ function SE.Build(win)
     local note = W.Text(bar, "small")
     note:SetPoint("RIGHT", -S.pad, 0)
     note:SetText("Saved for your account")
+    -- Player ratings: their own page over this one (UI/Ratings.lua).
+    local ratings = W.Button(bar, "Player ratings  ›", "ghost", 132, 28, "tiny")
+    ratings:SetPoint("RIGHT", note, "LEFT", -16, 0)
+    ratings:SetScript("OnClick", function() if UI.Ratings then UI.Ratings.ShowPage() end end)
 
     -- Two columns
     local left = CreateFrame("Frame", nil, f)
@@ -214,6 +219,8 @@ function SE.Build(win)
     ver:SetPoint("BOTTOMRIGHT", -S.pad, 14)
     local getMeta = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
     ver:SetText(getMeta and getMeta("GottaQueueEmAll", "Version") or "")
+
+    if UI.Ratings then UI.Ratings.BuildPage(f, SE) end
 
     local panels = { alerts, list, foot, wnd }
     f:SetScript("OnShow", function()

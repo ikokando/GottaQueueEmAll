@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.4.1
+
+- **Player ratings (Mythic+):** after a key (in time, over time or ended early) a window lists
+  your group: rate whoever you want Good or Bad, with an optional note. One rating per
+  player; rating again replaces it. Rated players get a green GOOD or red BAD tag next to the
+  leader on Mythic+ cards, next to applicants to your Mythic+ group and on the invite card;
+  the tooltip shows when, where and your note. Groups of leaders rated Bad are hidden from
+  the Mythic+ search ("Hide rated Bad" next to "Upgrades only", also in the settings; on). Ratings stay on your PC and are never sent anywhere.
+  Settings › Player ratings: the list (search, Good / Bad filter, flip, delete), expiry after
+  3, 6 or 12 months or never (6), delete all. `/gotta rate` previews the window,
+  `/gotta ratings` opens the list.
+
 ## 1.4.0
 
 - **Filter presets:** "Presets" right of the group count saves all Mythic+ filters under a

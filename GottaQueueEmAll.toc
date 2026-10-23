@@ -2,7 +2,7 @@
 ## Title: Gotta Queue 'Em All
 ## Notes: Your Group Finder in its own window: Mythic+ with a key-level filter, Raid and Mythic 0 - search, sign up, list your group and manage applicants, with ratings, roles, specs, lockouts, Lust / B-Res and Raider.IO info at a glance.
 ## Author: deuxzeus
-## Version: 1.4.0
+## Version: 1.4.1
 ## OptionalDeps: RaiderIO
 ## SavedVariables: GottaQueueEmAllDB
 ## X-Curse-Project-ID: 1714876
@@ -17,6 +17,7 @@ UI\Widgets.lua
 UI\Data.lua
 UI\Realms.lua
 UI\Region.lua
+UI\Ratings.lua
 UI\KeyRead.lua
 UI\TitleBox.lua
 UI\KeyProbe.lua

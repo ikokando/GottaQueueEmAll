@@ -9,6 +9,8 @@
 --  /gotta keystone        preview of the keystone window
 --  /gotta keyprobe        whether key levels can be read from titles (for bug reports)
 --  /gotta deserter        preview of the Keystone Deserter marks (on / off)
+--  /gotta rate            preview of the rating window after a key
+--  /gotta ratings         your player ratings (list, expiry, delete)
 -------------------------------------------------------------------------------
 local _, ns = ...
 
@@ -62,6 +64,10 @@ local DEFAULTS = {
     keystoneReadyFirst = true, -- Activate: a ready check first (leader or assistant)
     pullTimer = 10,            -- seconds, the slider's last value
     keystoneWide = true,       -- two columns (fits any screen at full size); off: one, like the design
+    -- Player ratings (UI/Ratings.lua): Good / Bad for Mythic+ players, only on this PC.
+    ratePrompt = true,         -- the rating window after a key
+    rateHideBad = true,        -- groups of leaders rated Bad left out of the Mythic+ search
+    rateExpire = 6,            -- months a rating counts (0: forever)
 }
 
 -- Settings of the 0.x sidebar addon, and logs of pre-release test builds;
@@ -225,6 +231,8 @@ local function Help()
     print("  /gotta keystone  -  preview the keystone window")
     print("  /gotta keyprobe  -  check whether key levels can be read (for bug reports)")
     print("  /gotta deserter  -  preview how Keystone Deserters are shown (on / off)")
+    print("  /gotta rate  -  preview the rating window after a key")
+    print("  /gotta ratings  -  your player ratings")
 end
 
 SlashCmdList.GOTTAQUEUEEMALL = function(msg)
@@ -240,6 +248,11 @@ SlashCmdList.GOTTAQUEUEEMALL = function(msg)
         ns.UI.Keystone.Preview()
     elseif msg == "keyprobe" and ns.UI and ns.UI.KeyProbe then
         ns.UI.KeyProbe.Run()
+    elseif msg == "rate" and ns.UI and ns.UI.Ratings then
+        ns.UI.Ratings.Preview()
+    elseif msg == "ratings" and ns.UI and ns.UI.Ratings then
+        ns.OpenSettings()
+        ns.UI.Ratings.ShowPage()
     elseif msg == "deserter" then
         -- Made-up Keystone Deserters (you, some groups, some applicants) to
         -- see how they look. Until switched off or the next /reload.

@@ -33,6 +33,7 @@ end
 
 -- A realm's key: without spaces, hyphens, apostrophes, dots and brackets.
 local function Key(realm) return Lower((realm:gsub("[%s%-'%.%(%)]", ""))) end
+R.RealmKey = Key   -- player ratings key players by it too (UI/Ratings.lua)
 
 -- This region's realms by key (nil on a region without data, e.g. China or a PTR).
 local realms

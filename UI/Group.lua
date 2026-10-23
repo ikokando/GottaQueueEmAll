@@ -350,6 +350,8 @@ local function NewLine(row)
     l.best = W.Text(row, "bodySm")
     l.lust = W.Glyph(row, "lust", 24, C.lust)
     l.brez = W.Glyph(row, "brez", 24, C.brez)
+    l.rate = UI.Ratings.Tag(row)   -- your rating (Mythic+ listings, UI/Ratings.lua)
+    l.rate:SetPoint("LEFT", l.name, "RIGHT", 8, 0)
     l.deserter = W.DeserterTag(row)
     l.deserter:SetPoint("LEFT", l.name, "RIGHT", 8, 0)
     return l
@@ -372,7 +374,7 @@ local function ShowLine(l, shown)
     for _, k in ipairs({ "name", "sub", "badge", "rating", "rmeter", "ilvl", "imeter", "best", "lust", "brez" }) do
         l[k]:SetShown(shown)
     end
-    if not shown then l.deserter:Hide() end   -- shown: by FillRow, deserters only
+    if not shown then l.deserter:Hide(); l.rate:Hide() end   -- shown: by FillRow, deserters / rated only
 end
 
 local function RowTooltip(row)
@@ -392,6 +394,10 @@ local function RowTooltip(row)
             GameTooltip:AddLine((#a.members > 1 and (m.name .. ": ") or "") .. "Keystone Deserter, has left Mythic+ runs early",
                 col[1], col[2], col[3], true)
         end
+    end
+    -- Your ratings and notes (Mythic+).
+    if G.entry and G.entry.mplus then
+        for _, m in ipairs(a.members) do UI.Ratings.AddTooltip(GameTooltip, m.fullName, #a.members > 1 and m.name or nil) end
     end
     -- Raider.IO profile of each member (if installed).
     for _, m in ipairs(a.members) do
@@ -437,6 +443,12 @@ local function FillRow(row, a)
         l.name:SetText(m.name)
         l.name:SetTextColor(unpack(T.ClassColor(m.class)))
         local sub = m.spec or (m.class and LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[m.class]) or ""
+        -- Your rating (Mythic+ only): GOOD / BAD next to the name, then the
+        -- Keystone Deserter tag.
+        local rated = G.entry and G.entry.mplus and UI.Ratings.PaintTag(l.rate, m.fullName)
+        if not rated then l.rate:Hide() end
+        l.deserter:ClearAllPoints()
+        l.deserter:SetPoint("LEFT", rated and l.rate or l.name, "RIGHT", 8, 0)
         l.deserter:SetShown(m.leaver)   -- Keystone Deserter: the tag next to the name
         -- What Create's "Looking for" asks for (the raid page's for a raid).
         -- Not Mythic+ (a raid, a dungeon without a key): no rating, no best run.

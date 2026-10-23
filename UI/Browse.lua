@@ -672,7 +672,25 @@ local function BuildTools(page, scroll)
     end)
     up:HookScript("OnLeave", function() GameTooltip:Hide() end)
     B.toggles.upgrades = up
-    tools:SetWidth(up:GetWidth() + 6 + pb:GetWidth())
+    -- Groups of leaders you rated Bad (UI/Ratings.lua); the same switch as on
+    -- Settings › Player ratings, saved for your account.
+    local bad = W.Toggle(tools, "Hide rated Bad", nil, nil, 22)
+    bad:SetPoint("RIGHT", up, "LEFT", -6, 0)
+    bad.onChange = function(v)
+        local db = ns.DB and ns.DB()
+        if db then db.rateHideBad = v end
+        Render()
+    end
+    bad:HookScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:SetText("Hide rated Bad", 1, 1, 1)
+        GameTooltip:AddLine("Leaves out groups whose leader you rated Bad. Your ratings: Settings › Player ratings "
+            .. "(/gotta ratings).", 0.8, 0.8, 0.8, true)
+        GameTooltip:Show()
+    end)
+    bad:HookScript("OnLeave", function() GameTooltip:Hide() end)
+    B.rateToggle = bad
+    tools:SetWidth(bad:GetWidth() + 6 + up:GetWidth() + 6 + pb:GetWidth())
     B.tools = tools
 end
 
@@ -707,6 +725,7 @@ local function Tooltip(card)
         GameTooltip:AddLine("No upgrade for you: your best here is higher", 0.6, 0.65, 0.72)
     end
     UI.Region.AddTooltipLine(GameTooltip, r.leaderFull)   -- the leader's country and realm
+    UI.Ratings.AddTooltip(GameTooltip, r.leaderFull)       -- your rating of the leader and its note
     -- The leader's Raider.IO profile (if installed).
     if r.leaderFull then
         GameTooltip:AddLine(" ")
@@ -758,6 +777,8 @@ local function NewCard(parent)
     c.name = W.Text(c, "h2"); c.name:SetPoint("TOPLEFT", c.strip, "TOPRIGHT", 14, -10)
     c.title = W.Text(c, "body", C.text2); c.title:SetPoint("BOTTOMLEFT", c.name, "BOTTOMRIGHT", 10, 0)
     c.line2 = W.Text(c, "bodySm"); c.line2:SetPoint("TOPLEFT", c.name, "BOTTOMLEFT", 0, -6)
+    c.rate = UI.Ratings.Tag(c)   -- your rating of the leader (UI/Ratings.lua)
+    c.rate:SetPoint("LEFT", c.line2, "RIGHT", 10, 0)
     c.deserter = W.DeserterTag(c)
     c.deserter:SetPoint("LEFT", c.line2, "RIGHT", 10, 0)
     c.deserter:Hide()
@@ -863,6 +884,10 @@ local function FillCard(c, r)
         line = line .. "  |cff8d98a8·  no run here this season|r"
     end
     c.line2:SetText(line)
+    -- Your rating of the leader: GOOD / BAD, then the deserter tag after it.
+    local rated = UI.Ratings.PaintTag(c.rate, r.leaderFull)
+    c.deserter:ClearAllPoints()
+    c.deserter:SetPoint("LEFT", rated and c.rate or c.line2, "RIGHT", 10, 0)
     -- Keystone Deserters: the leader ("DESERTER", "+N" for more), else how
     -- many of the others. Who exactly: the card's tooltip.
     local others = (r.leavers or 0) - (r.leaderLeaver and 1 or 0)
@@ -959,10 +984,17 @@ Render = function(animate)
     if not (B.child and B.page and B.page:IsVisible()) then return end
     local st = B.st
     if B.appsBar then B.appsBar:Paint(true) end
-    -- Groups that don't fit the client-side filters are left out entirely.
-    local list, hidden = {}, 0
+    if B.rateToggle then   -- also switched on the settings page
+        local db = ns.DB and ns.DB()
+        B.rateToggle:SetChecked(not (db and db.rateHideBad == false))
+    end
+    -- Groups that don't fit the client-side filters are left out entirely,
+    -- and those of leaders you rated Bad (when that is on, UI/Ratings.lua).
+    local list, hidden, rated = {}, 0, 0
     for _, r in ipairs(B.results) do
-        if D.Fits(r, st) then list[#list + 1] = r else hidden = hidden + 1 end
+        if not D.Fits(r, st) then hidden = hidden + 1
+        elseif UI.Ratings.Hides(r.leaderFull) then rated = rated + 1
+        else list[#list + 1] = r end
     end
     table.sort(list, ORDER[st.sort] or ORDER.rating)
     for i, r in ipairs(list) do
@@ -982,6 +1014,7 @@ Render = function(animate)
     if B.scroll:GetVerticalScroll() > limit then B.scroll:SetVerticalScroll(limit) end
 
     local hiddenText = hidden > 0 and ("  ·  %d hidden by your filters"):format(hidden) or ""
+    if rated > 0 then hiddenText = hiddenText .. ("  ·  %d hidden: leader rated Bad"):format(rated) end
     -- The server found more than it sent: say so, it is easy to miss groups.
     if B.total and B.sent and B.total > B.sent then
         hiddenText = hiddenText .. ("  ·  |cffe0b868server sent %d of %d found, narrow the search to see the rest|r")
@@ -992,8 +1025,9 @@ Render = function(animate)
             :format(B.boxText)
     end
     if #list == 0 then
-        B.count:SetText(hidden > 0 and ("%d %s found, all hidden by your filters"):format(hidden,
-            hidden == 1 and "group" or "groups") or "")
+        local all = hidden + rated
+        B.count:SetText(all > 0 and ("%d %s found, all hidden by your filters%s"):format(all,
+            all == 1 and "group" or "groups", rated > 0 and (" or ratings (%d leader rated Bad)"):format(rated) or "") or "")
         B.empty:SetText(B.searched and "No Mythic+ groups to show." or "Pick your filters and press Search.")
         B.empty:Show()
     else

@@ -36,6 +36,12 @@ res and Raider.IO info at a glance. Blizzard's window stays closed.
   for where their realm is: the country by the realm's language (Germany, France, Spain,
   Italy, Russia, Portugal; English EU realms are "Europe"), in the Americas US, Latin
   America, Brazil or Oceania. The tooltip names the country and realm.
+- **Player ratings (Mythic+):** after a key a small window lists your group; rate whoever
+  you want Good or Bad, with a note if you like. Rated players get a GOOD / BAD tag as the
+  leader of a Mythic+ group, as applicants to your Mythic+ group and on the invite card;
+  groups of leaders rated Bad can be hidden from the search. Ratings stay on your PC, are
+  never sent or shared, expire after 3, 6 or 12 months (or never) and can be deleted any
+  time: Settings › Player ratings, or `/gotta ratings`.
 - **Listed a while:** groups up for 20 minutes or more with 2 players or fewer get a quiet
   hint; they stay in the list.
 - Client-side filters: key level, leader's best in the dungeon, Lust / B-Res fit, not

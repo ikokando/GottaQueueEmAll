@@ -163,6 +163,8 @@ local VARIANT = {
               border = { 0.63, 0.71, 0.84, 0.14 }, hoverBorder = { 0.82, 0.64, 0.30, 0.6 }, text = C.label, hoverText = C.textHi },
     done  = { bg = { 0.24, 0.69, 0.38, 0.12 }, hoverBg = { 0.24, 0.69, 0.38, 0.2 },
               border = { 0.24, 0.69, 0.38, 0.45 }, hoverBorder = { 0.24, 0.69, 0.38, 0.7 }, text = C.goodText, hoverText = C.goodText },
+    bad   = { bg = { 0.88, 0.34, 0.29, 0.14 }, hoverBg = { 0.88, 0.34, 0.29, 0.22 },
+              border = { 0.88, 0.34, 0.29, 0.5 }, hoverBorder = { 0.88, 0.34, 0.29, 0.75 }, text = C.badText, hoverText = C.badText },
 }
 
 local function PaintButton(b)
@@ -187,7 +189,8 @@ local function PaintButton(b)
 end
 
 -- variant: gold (primary, metallic, shine), ghost (secondary), quiet (cancel /
--- destructive on hover), mark (slider quick values), done (confirmed state).
+-- destructive on hover), mark (slider quick values), done (confirmed state),
+-- bad (a chosen Bad rating, a confirm before deleting).
 function W.Button(parent, text, variant, width, height, style)
     local b = CreateFrame("Button", nil, parent)
     b:SetSize(width or 120, height or T.S.btnH)
