@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.4.3
 
 - **Dungeon chips show your real best:** the chip shows the key's upgrade, "15++" for a +15
   timed with two upgrades, instead of "+15". A run over time shows just the level in grey
