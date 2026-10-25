@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **Dungeon chips show your real best:** the chip shows the key's upgrade, "15++" for a +15
+  timed with two upgrades, instead of "+15". A run over time shows just the level in grey
+  ("16"). The upgrade is worked out from the run's time against the timer (60 % / 80 % / 100 %).
+- **Dungeon chip tooltip:** your points in that dungeon, your best run in time and over time
+  with their times against the timer (left / over), and the times for ++ and +++.
+
 ## 1.4.2
 
 - **Key level from titles like "20+", "+17++", "++19 push" or "+++17":** several "+" before

@@ -61,6 +61,31 @@ local function CardH() return CARD_H + (W.SpecView() and SPEC_H or 0) end
 -------------------------------------------------------------------------------
 --  Dungeon chips
 -------------------------------------------------------------------------------
+-- A run as on the chip: "15++" in time (one "+" per level it upgraded the
+-- key), "15" over time (grey).
+local function RunText(run)
+    return run.level .. ("+"):rep(run.up or 0)
+end
+
+local function Clock(sec)
+    sec = floor((sec or 0) + 0.5)
+    return ("%d:%02d"):format(floor(sec / 60), sec % 60)
+end
+
+-- One run in the chip's tooltip: level, time against the timer.
+local function RunLine(label, run, limit)
+    local line = label .. T.ColorCode(T.KeyColor(run.level, run.timed)) .. RunText(run) .. "|r"
+    if run.sec then
+        line = line .. "   " .. Clock(run.sec)
+        if limit then
+            local d = run.sec - limit
+            line = line .. " / " .. Clock(limit) .. (d > 0 and ("  |cffd06a5a" .. Clock(d) .. " over|r")
+                or ("  |cff96e3ad" .. Clock(-d) .. " left|r"))
+        end
+    end
+    GameTooltip:AddLine(line, 0.8, 0.8, 0.8)
+end
+
 local function BuildChips()
     local st = B.st
     local groups = ns.SeasonGroups and ns.SeasonGroups() or {}
@@ -69,9 +94,10 @@ local function BuildChips()
     local ids, parts = {}, {}
     for _, g in ipairs(groups) do
         ids[#ids + 1] = g.id
-        local level, timed   -- ("a and f()" would keep only f's first value)
-        if ns.BestKey then level, timed = ns.BestKey(g.cid) end
-        parts[#parts + 1] = g.id .. ":" .. tostring(level) .. tostring(timed)
+        local runs = ns.BestRuns and ns.BestRuns(g.cid)
+        local c, o = runs and runs.counted, runs and runs.over
+        parts[#parts + 1] = g.id .. ":" .. (c and (c.level .. "/" .. c.up .. "/" .. tostring(c.sec)) or "-")
+            .. ":" .. (o and o.level or "-") .. ":" .. tostring(runs and runs.score)
     end
     local key = table.concat(parts, ",")
     if B.chipKey == key and #B.chips > 0 then return end
@@ -91,18 +117,30 @@ local function BuildChips()
     B.chips[1] = all
     for _, g in ipairs(groups) do
         local tex = g.cid and select(4, C_ChallengeMode.GetMapUIInfo(g.cid))
-        local level, timed
-        if ns.BestKey then level, timed = ns.BestKey(g.cid) end
+        local runs = ns.BestRuns and ns.BestRuns(g.cid)
+        local best = runs and runs.counted
         local c = W.Chip(row, T.Short(g.name), tex or "Interface\\Icons\\INV_Misc_QuestionMark",
-            level and ("+" .. level) or nil, level and T.KeyColor(level, timed) or nil)
+            best and RunText(best) or nil, best and T.KeyColor(best.level, best.timed) or nil)
         c.groupID = g.id
         c:SetScript("OnEnter", nil)
         c:HookScript("OnEnter", function(self)
             self.hot = true; self:SetOn(self.on)
             GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
             GameTooltip:SetText(g.name, 1, 1, 1)
-            if level then
-                GameTooltip:AddLine(("Your season best: +%d (%s)"):format(level, timed and "in time" or "over time"), 0.8, 0.8, 0.8)
+            if runs then
+                if runs.score then
+                    GameTooltip:AddLine("Your score here: " .. T.ColorCode(T.C.goldText)
+                        .. floor(runs.score + 0.5) .. "|r", 0.8, 0.8, 0.8)
+                end
+                if runs.inTime then RunLine("Best in time:  ", runs.inTime, runs.limit) end
+                if runs.over then RunLine("Best over time:  ", runs.over, runs.limit) end
+                if not runs.inTime and not runs.over then RunLine("Your best:  ", best, runs.limit) end
+                if runs.limit then
+                    GameTooltip:AddLine(("Timer %s  ·  ++ under %s  ·  +++ under %s"):format(Clock(runs.limit),
+                        Clock(runs.limit * 0.8), Clock(runs.limit * 0.6)), 0.55, 0.6, 0.66)
+                end
+            else
+                GameTooltip:AddLine("No run here yet this season", 0.55, 0.6, 0.66)
             end
             GameTooltip:Show()
         end)

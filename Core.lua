@@ -141,6 +141,65 @@ function ns.BestKey(cid)
     return level, timed, score
 end
 
+-- How many levels a run would upgrade the key: +3 within 60 % of the timer,
+-- +2 within 80 %, +1 in time, 0 over time (the game's thresholds; the
+-- result is worked out here from the run's time, not read from the game).
+function ns.Upgrades(sec, limit)
+    if not (sec and limit and limit > 0) then return nil end
+    if sec <= limit * 0.6 then return 3 end
+    if sec <= limit * 0.8 then return 2 end
+    if sec <= limit then return 1 end
+    return 0
+end
+
+-- Your runs in a dungeon this season, for the dungeon chips:
+--   score    the dungeon's points in your rating
+--   limit    the timer in seconds
+--   inTime   best timed run { level, sec, up }   (nil: none)
+--   over     best over-time run, only when above the timed one
+--   counted  the run your score counts (the game's rating summary; else the
+--            timed one, else the over-time one), with .timed
+function ns.BestRuns(cid)
+    if not (cid and C_MythicPlus and C_MythicPlus.GetSeasonBestForMap) then return nil end
+    local t = {}
+    local _, _, limit = C_ChallengeMode.GetMapUIInfo(cid)
+    t.limit = type(limit) == "number" and limit > 0 and limit or nil
+    local function Run(info, timed)
+        if type(info) ~= "table" or type(info.level) ~= "number" or info.level <= 0 then return nil end
+        local sec = type(info.durationSec) == "number" and info.durationSec or nil
+        return { level = info.level, sec = sec, timed = timed,
+                 up = timed and (ns.Upgrades(sec, t.limit) or 1) or 0 }
+    end
+    local ok, inTime, overTime = pcall(C_MythicPlus.GetSeasonBestForMap, cid)
+    if not ok then return nil end
+    t.inTime = Run(inTime, true)
+    local over = Run(overTime, false)
+    if over and (not t.inTime or over.level > t.inTime.level) then t.over = over end
+
+    -- Score and the counted run from the rating summary.
+    local sum = C_PlayerInfo and C_PlayerInfo.GetPlayerMythicPlusRatingSummary
+                and C_PlayerInfo.GetPlayerMythicPlusRatingSummary("player")
+    for _, r in ipairs(type(sum) == "table" and type(sum.runs) == "table" and sum.runs or {}) do
+        if r.challengeModeID == cid then
+            if type(r.mapScore) == "number" and r.mapScore > 0 then t.score = r.mapScore end
+            if type(r.bestRunLevel) == "number" and r.bestRunLevel > 0 then
+                local timed = r.finishedSuccess and true or false
+                local sec = type(r.bestRunDurationMS) == "number" and r.bestRunDurationMS / 1000 or nil
+                t.counted = { level = r.bestRunLevel, sec = sec, timed = timed,
+                              up = timed and (ns.Upgrades(sec, t.limit) or 1) or 0 }
+            end
+            break
+        end
+    end
+    if not t.score and C_MythicPlus.GetSeasonBestAffixScoreInfoForMap then
+        local _, bonus = C_MythicPlus.GetSeasonBestAffixScoreInfoForMap(cid)
+        if type(bonus) == "number" and bonus > 0 then t.score = bonus end
+    end
+    t.counted = t.counted or t.inTime or t.over
+    if not t.counted then return nil end
+    return t
+end
+
 -------------------------------------------------------------------------------
 --  Settings page (Options > AddOns > Gotta Queue 'Em All)
 -------------------------------------------------------------------------------
